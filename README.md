@@ -26,6 +26,8 @@ A Slack-like desktop app for orchestrating Claude Code agents across GitHub repo
 ## Development
 
 ```bash
+cd chorus
+
 # Install dependencies
 bun install
 
@@ -42,17 +44,20 @@ bun run build
 ## Project Structure
 
 ```
-src/
-├── main/           # Electron main process
-│   ├── index.ts    # App entry, IPC handlers
-│   ├── store/      # Persistence (electron-store)
-│   └── services/   # fs, git, agent, conversation
-├── preload/        # Context bridge (window.api)
-└── renderer/       # React UI
-    └── src/
-        ├── components/  # Sidebar, Chat, MainPane
-        ├── stores/      # Zustand stores
-        └── types/       # TypeScript types
+chorus/
+├── src/
+│   ├── main/           # Electron main process
+│   │   ├── index.ts    # App entry, IPC handlers
+│   │   ├── store/      # Persistence (electron-store)
+│   │   └── services/   # fs, git, agent, conversation
+│   ├── preload/        # Context bridge (window.api)
+│   └── renderer/       # React UI
+│       └── src/
+│           ├── components/  # Sidebar, Chat, MainPane
+│           ├── stores/      # Zustand stores
+│           └── types/       # TypeScript types
+├── specifications/     # Feature specs and implementation plans
+└── docs/               # Documentation
 ```
 
 ## Defining Agents
@@ -70,7 +75,3 @@ You are a code reviewer. Focus on:
 - Security vulnerabilities
 - Performance optimizations
 ```
-
-## License
-
-MIT
