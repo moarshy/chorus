@@ -64,6 +64,10 @@ body,
   border-color: var(--border-color);
 }
 
+@utility border-sidebar {
+  border-color: var(--sidebar-bg);
+}
+
 @utility text-primary {
   color: var(--text-primary);
 }
