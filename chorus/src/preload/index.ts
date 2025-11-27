@@ -1,15 +1,33 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
+// Types for streaming events
+interface AgentStreamDelta {
+  conversationId: string
+  delta: string
+}
+
+interface AgentMessageEvent {
+  conversationId: string
+  message: unknown
+}
+
+interface AgentStatusEvent {
+  agentId: string
+  status: 'ready' | 'busy' | 'error'
+  error?: string
+}
+
 // Custom APIs for renderer - these are the ONLY APIs renderer can access
 const api = {
   // Settings operations
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
-    set: (settings: { rootWorkspaceDir?: string; theme?: 'dark' | 'light' }) =>
+    set: (settings: { rootWorkspaceDir?: string; theme?: 'dark' | 'light'; chatSidebarCollapsed?: boolean; chatSidebarWidth?: number }) =>
       ipcRenderer.invoke('settings:set', settings),
     getRootDir: () => ipcRenderer.invoke('settings:get-root-dir'),
-    setRootDir: (path: string) => ipcRenderer.invoke('settings:set-root-dir', path)
+    setRootDir: (path: string) => ipcRenderer.invoke('settings:set-root-dir', path),
+    getChorusDir: () => ipcRenderer.invoke('settings:get-chorus-dir')
   },
 
   // Workspace operations
@@ -56,6 +74,53 @@ const api = {
       ipcRenderer.on('git:clone-complete', handler)
       return () => ipcRenderer.removeListener('git:clone-complete', handler)
     }
+  },
+
+  // Conversation operations
+  conversation: {
+    list: (workspaceId: string, agentId: string) =>
+      ipcRenderer.invoke('conversation:list', workspaceId, agentId),
+    create: (workspaceId: string, agentId: string) =>
+      ipcRenderer.invoke('conversation:create', workspaceId, agentId),
+    load: (conversationId: string) =>
+      ipcRenderer.invoke('conversation:load', conversationId),
+    delete: (conversationId: string) =>
+      ipcRenderer.invoke('conversation:delete', conversationId)
+  },
+
+  // Agent operations (for Claude CLI communication)
+  agent: {
+    send: (conversationId: string, message: string, repoPath: string, sessionId?: string) =>
+      ipcRenderer.invoke('agent:send', conversationId, message, repoPath, sessionId),
+    stop: (agentId: string) =>
+      ipcRenderer.invoke('agent:stop', agentId),
+    checkAvailable: () =>
+      ipcRenderer.invoke('agent:check-available'),
+
+    // Event listeners with cleanup
+    onStreamDelta: (callback: (event: AgentStreamDelta) => void) => {
+      const handler = (_event: unknown, data: AgentStreamDelta) => callback(data)
+      ipcRenderer.on('agent:stream-delta', handler)
+      return () => ipcRenderer.removeListener('agent:stream-delta', handler)
+    },
+    onMessage: (callback: (event: AgentMessageEvent) => void) => {
+      const handler = (_event: unknown, data: AgentMessageEvent) => callback(data)
+      ipcRenderer.on('agent:message', handler)
+      return () => ipcRenderer.removeListener('agent:message', handler)
+    },
+    onStatus: (callback: (event: AgentStatusEvent) => void) => {
+      const handler = (_event: unknown, data: AgentStatusEvent) => callback(data)
+      ipcRenderer.on('agent:status', handler)
+      return () => ipcRenderer.removeListener('agent:status', handler)
+    }
+  },
+
+  // Session operations
+  session: {
+    get: (agentId: string) =>
+      ipcRenderer.invoke('session:get', agentId),
+    clear: (agentId: string) =>
+      ipcRenderer.invoke('session:clear', agentId)
   }
 }
 

@@ -35,6 +35,60 @@ interface Workspace {
 interface ChorusSettings {
   rootWorkspaceDir: string
   theme: 'dark' | 'light'
+  chatSidebarCollapsed: boolean
+  chatSidebarWidth: number
+}
+
+// ============================================
+// Conversation Types
+// ============================================
+
+interface ContentBlock {
+  type: 'text' | 'tool_use' | 'tool_result'
+  text?: string
+  name?: string
+  input?: Record<string, unknown>
+}
+
+interface ConversationMessage {
+  uuid: string
+  type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'error' | 'system'
+  content: string | ContentBlock[]
+  timestamp: string
+  sessionId?: string
+  toolName?: string
+  toolInput?: Record<string, unknown>
+}
+
+interface Conversation {
+  id: string
+  sessionId: string | null
+  agentId: string
+  workspaceId: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  messageCount: number
+}
+
+// ============================================
+// Agent Streaming Event Types
+// ============================================
+
+interface AgentStreamDelta {
+  conversationId: string
+  delta: string
+}
+
+interface AgentMessageEvent {
+  conversationId: string
+  message: ConversationMessage
+}
+
+interface AgentStatusEvent {
+  agentId: string
+  status: 'ready' | 'busy' | 'error'
+  error?: string
 }
 
 interface DirectoryEntry {
@@ -114,6 +168,27 @@ interface GitAPI {
   onCloneComplete: (callback: (result: CloneResult) => void) => () => void
 }
 
+interface ConversationAPI {
+  list: (workspaceId: string, agentId: string) => Promise<ApiResult<Conversation[]>>
+  create: (workspaceId: string, agentId: string) => Promise<ApiResult<Conversation>>
+  load: (conversationId: string) => Promise<ApiResult<{ conversation: Conversation | null; messages: ConversationMessage[] }>>
+  delete: (conversationId: string) => Promise<ApiResult>
+}
+
+interface AgentAPI {
+  send: (conversationId: string, message: string, repoPath: string, sessionId?: string) => Promise<ApiResult>
+  stop: (agentId: string) => Promise<ApiResult>
+  checkAvailable: () => Promise<ApiResult<string | null>>
+  onStreamDelta: (callback: (event: AgentStreamDelta) => void) => () => void
+  onMessage: (callback: (event: AgentMessageEvent) => void) => () => void
+  onStatus: (callback: (event: AgentStatusEvent) => void) => () => void
+}
+
+interface SessionAPI {
+  get: (agentId: string) => Promise<ApiResult<string | null>>
+  clear: (agentId: string) => Promise<ApiResult>
+}
+
 interface CustomAPI {
   settings: SettingsAPI
   workspace: WorkspaceAPI
@@ -121,6 +196,9 @@ interface CustomAPI {
   fs: FileSystemAPI
   dialog: DialogAPI
   git: GitAPI
+  conversation: ConversationAPI
+  agent: AgentAPI
+  session: SessionAPI
 }
 
 declare global {
@@ -140,5 +218,11 @@ export type {
   GitCommit,
   CloneProgress,
   CloneResult,
-  ApiResult
+  ApiResult,
+  ContentBlock,
+  ConversationMessage,
+  Conversation,
+  AgentStreamDelta,
+  AgentMessageEvent,
+  AgentStatusEvent
 }

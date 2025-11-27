@@ -41,8 +41,10 @@ export function AgentItem({ agent }: AgentItemProps) {
   const { selectedAgentId, selectAgent } = useWorkspaceStore()
   const isSelected = selectedAgentId === agent.id
 
-  const handleClick = () => {
-    selectAgent(agent.id)
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    console.log('[AgentItem] Clicked:', agent.name, 'workspaceId:', agent.workspaceId)
+    selectAgent(agent.id, agent.workspaceId)
   }
 
   const avatarColor = getAvatarColor(agent.name)

@@ -11,7 +11,8 @@ import {
   getWorkspaces,
   addWorkspace,
   removeWorkspace,
-  updateWorkspace
+  updateWorkspace,
+  getChorusDir
 } from './store'
 
 // Import services
@@ -22,6 +23,19 @@ import {
 } from './services/workspace-service'
 import { listDirectory, readFile } from './services/fs-service'
 import { isRepo, getStatus, getBranch, getLog, clone, cancelClone } from './services/git-service'
+import {
+  listConversations,
+  createConversation,
+  loadConversation,
+  deleteConversation
+} from './services/conversation-service'
+import {
+  sendMessage,
+  stopAgent,
+  isClaudeAvailable,
+  getSessionId,
+  clearSession
+} from './services/agent-service'
 
 // Store reference to main window for IPC events
 let mainWindow: BrowserWindow | null = null
@@ -262,6 +276,116 @@ app.whenReady().then(() => {
   ipcMain.handle('git:cancel-clone', async () => {
     cancelClone()
     return { success: true }
+  })
+
+  // ============================================
+  // CONVERSATION IPC HANDLERS
+  // ============================================
+
+  ipcMain.handle('conversation:list', async (_event, workspaceId: string, agentId: string) => {
+    try {
+      const conversations = listConversations(workspaceId, agentId)
+      return { success: true, data: conversations }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('conversation:create', async (_event, workspaceId: string, agentId: string) => {
+    try {
+      const conversation = createConversation(workspaceId, agentId)
+      return { success: true, data: conversation }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('conversation:load', async (_event, conversationId: string) => {
+    try {
+      const result = loadConversation(conversationId)
+      return { success: true, data: result }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('conversation:delete', async (_event, conversationId: string) => {
+    try {
+      deleteConversation(conversationId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('settings:get-chorus-dir', async () => {
+    return { success: true, data: getChorusDir() }
+  })
+
+  // ============================================
+  // AGENT IPC HANDLERS
+  // ============================================
+
+  ipcMain.handle(
+    'agent:send',
+    async (_event, conversationId: string, message: string, repoPath: string, sessionId?: string) => {
+      try {
+        if (!mainWindow) {
+          return { success: false, error: 'Main window not available' }
+        }
+        // Extract agentId from the conversation context
+        // For now, we'll derive it from the conversationId
+        // The sendMessage function handles the actual agent communication
+        const { data } = await (async () => {
+          const result = loadConversation(conversationId)
+          return { data: result }
+        })()
+
+        const agentId = data?.conversation?.agentId || conversationId
+
+        // Fire and forget - response comes via events
+        sendMessage(conversationId, agentId, repoPath, message, sessionId || null, mainWindow)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle('agent:stop', async (_event, agentId: string) => {
+    try {
+      stopAgent(agentId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('agent:check-available', async () => {
+    try {
+      const claudePath = isClaudeAvailable()
+      return { success: true, data: claudePath }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('session:get', async (_event, agentId: string) => {
+    try {
+      const sessionId = getSessionId(agentId)
+      return { success: true, data: sessionId }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('session:clear', async (_event, agentId: string) => {
+    try {
+      clearSession(agentId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   })
 
   createWindow()

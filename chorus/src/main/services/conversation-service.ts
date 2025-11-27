@@ -1,0 +1,336 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, unlinkSync } from 'fs'
+import { join } from 'path'
+import { v4 as uuidv4 } from 'uuid'
+import { getChorusDir } from '../store'
+
+// ============================================
+// Types
+// ============================================
+
+export interface ContentBlock {
+  type: 'text' | 'tool_use' | 'tool_result'
+  text?: string
+  name?: string
+  input?: Record<string, unknown>
+}
+
+export interface ConversationMessage {
+  uuid: string
+  type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'error' | 'system'
+  content: string | ContentBlock[]
+  timestamp: string
+  sessionId?: string
+  toolName?: string
+  toolInput?: Record<string, unknown>
+}
+
+export interface Conversation {
+  id: string
+  sessionId: string | null
+  agentId: string
+  workspaceId: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  messageCount: number
+}
+
+interface ConversationsIndex {
+  conversations: Conversation[]
+}
+
+// In-memory cache for conversation -> path mapping
+const conversationPathCache: Map<string, { workspaceId: string; agentId: string }> = new Map()
+
+// ============================================
+// Path Helpers
+// ============================================
+
+/**
+ * Get the sessions directory for a workspace/agent
+ * Returns: ~/.chorus/sessions/{workspaceId}/{agentId}/
+ */
+export function getSessionsDir(workspaceId: string, agentId: string): string {
+  return join(getChorusDir(), 'sessions', workspaceId, agentId)
+}
+
+/**
+ * Ensure the sessions directory exists
+ */
+export function ensureSessionsDir(workspaceId: string, agentId: string): void {
+  const dir = getSessionsDir(workspaceId, agentId)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+}
+
+/**
+ * Get path to conversations.json index file
+ */
+function getConversationsIndexPath(workspaceId: string, agentId: string): string {
+  return join(getSessionsDir(workspaceId, agentId), 'conversations.json')
+}
+
+/**
+ * Get path to messages JSONL file for a conversation
+ */
+function getMessagesFilePath(workspaceId: string, agentId: string, conversationId: string): string {
+  return join(getSessionsDir(workspaceId, agentId), `${conversationId}-messages.jsonl`)
+}
+
+// ============================================
+// Index Operations
+// ============================================
+
+/**
+ * Read the conversations index file
+ */
+function readConversationsIndex(workspaceId: string, agentId: string): ConversationsIndex {
+  const indexPath = getConversationsIndexPath(workspaceId, agentId)
+  if (!existsSync(indexPath)) {
+    return { conversations: [] }
+  }
+  try {
+    const content = readFileSync(indexPath, 'utf-8')
+    return JSON.parse(content)
+  } catch {
+    return { conversations: [] }
+  }
+}
+
+/**
+ * Write the conversations index file
+ */
+function writeConversationsIndex(workspaceId: string, agentId: string, index: ConversationsIndex): void {
+  ensureSessionsDir(workspaceId, agentId)
+  const indexPath = getConversationsIndexPath(workspaceId, agentId)
+  writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf-8')
+}
+
+// ============================================
+// Conversation CRUD Operations
+// ============================================
+
+/**
+ * List all conversations for a workspace/agent, sorted by updatedAt desc
+ */
+export function listConversations(workspaceId: string, agentId: string): Conversation[] {
+  const index = readConversationsIndex(workspaceId, agentId)
+
+  // Update cache for all conversations
+  for (const conv of index.conversations) {
+    conversationPathCache.set(conv.id, { workspaceId, agentId })
+  }
+
+  // Sort by updatedAt descending (most recent first)
+  return index.conversations.sort((a, b) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
+/**
+ * Create a new conversation
+ */
+export function createConversation(workspaceId: string, agentId: string): Conversation {
+  ensureSessionsDir(workspaceId, agentId)
+
+  const now = new Date().toISOString()
+  const conversation: Conversation = {
+    id: uuidv4(),
+    sessionId: null,
+    agentId,
+    workspaceId,
+    title: 'New Conversation',
+    createdAt: now,
+    updatedAt: now,
+    messageCount: 0
+  }
+
+  // Add to index
+  const index = readConversationsIndex(workspaceId, agentId)
+  index.conversations.push(conversation)
+  writeConversationsIndex(workspaceId, agentId, index)
+
+  // Update cache
+  conversationPathCache.set(conversation.id, { workspaceId, agentId })
+
+  return conversation
+}
+
+/**
+ * Load a conversation with its messages
+ */
+export function loadConversation(conversationId: string): { conversation: Conversation | null; messages: ConversationMessage[] } {
+  const location = getConversationPath(conversationId)
+  if (!location) {
+    return { conversation: null, messages: [] }
+  }
+
+  const { workspaceId, agentId } = location
+  const index = readConversationsIndex(workspaceId, agentId)
+  const conversation = index.conversations.find(c => c.id === conversationId)
+
+  if (!conversation) {
+    return { conversation: null, messages: [] }
+  }
+
+  // Read messages from JSONL file
+  const messagesPath = getMessagesFilePath(workspaceId, agentId, conversationId)
+  const messages: ConversationMessage[] = []
+
+  if (existsSync(messagesPath)) {
+    try {
+      const content = readFileSync(messagesPath, 'utf-8')
+      const lines = content.trim().split('\n').filter(line => line.trim())
+      for (const line of lines) {
+        try {
+          messages.push(JSON.parse(line))
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    } catch {
+      // Return empty messages on error
+    }
+  }
+
+  return { conversation, messages }
+}
+
+/**
+ * Update conversation metadata
+ */
+export function updateConversation(
+  conversationId: string,
+  updates: Partial<Pick<Conversation, 'title' | 'sessionId' | 'messageCount'>>
+): Conversation | null {
+  const location = getConversationPath(conversationId)
+  if (!location) {
+    return null
+  }
+
+  const { workspaceId, agentId } = location
+  const index = readConversationsIndex(workspaceId, agentId)
+  const conversationIndex = index.conversations.findIndex(c => c.id === conversationId)
+
+  if (conversationIndex === -1) {
+    return null
+  }
+
+  // Update fields
+  const conversation = index.conversations[conversationIndex]
+  if (updates.title !== undefined) conversation.title = updates.title
+  if (updates.sessionId !== undefined) conversation.sessionId = updates.sessionId
+  if (updates.messageCount !== undefined) conversation.messageCount = updates.messageCount
+  conversation.updatedAt = new Date().toISOString()
+
+  index.conversations[conversationIndex] = conversation
+  writeConversationsIndex(workspaceId, agentId, index)
+
+  return conversation
+}
+
+/**
+ * Delete a conversation and its messages file
+ */
+export function deleteConversation(conversationId: string): boolean {
+  const location = getConversationPath(conversationId)
+  if (!location) {
+    return false
+  }
+
+  const { workspaceId, agentId } = location
+  const index = readConversationsIndex(workspaceId, agentId)
+  const conversationIndex = index.conversations.findIndex(c => c.id === conversationId)
+
+  if (conversationIndex === -1) {
+    return false
+  }
+
+  // Remove from index
+  index.conversations.splice(conversationIndex, 1)
+  writeConversationsIndex(workspaceId, agentId, index)
+
+  // Delete messages file
+  const messagesPath = getMessagesFilePath(workspaceId, agentId, conversationId)
+  if (existsSync(messagesPath)) {
+    try {
+      unlinkSync(messagesPath)
+    } catch {
+      // Ignore deletion errors
+    }
+  }
+
+  // Remove from cache
+  conversationPathCache.delete(conversationId)
+
+  return true
+}
+
+// ============================================
+// Message Operations
+// ============================================
+
+/**
+ * Append a message to a conversation's JSONL file
+ */
+export function appendMessage(conversationId: string, message: ConversationMessage): boolean {
+  const location = getConversationPath(conversationId)
+  if (!location) {
+    return false
+  }
+
+  const { workspaceId, agentId } = location
+  ensureSessionsDir(workspaceId, agentId)
+
+  const messagesPath = getMessagesFilePath(workspaceId, agentId, conversationId)
+  const line = JSON.stringify(message) + '\n'
+
+  try {
+    appendFileSync(messagesPath, line, 'utf-8')
+
+    // Update message count and timestamp
+    const index = readConversationsIndex(workspaceId, agentId)
+    const conversation = index.conversations.find(c => c.id === conversationId)
+    if (conversation) {
+      conversation.messageCount++
+      conversation.updatedAt = new Date().toISOString()
+      writeConversationsIndex(workspaceId, agentId, index)
+    }
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Get the workspace/agent location for a conversation
+ * Uses in-memory cache for quick lookups
+ */
+export function getConversationPath(conversationId: string): { workspaceId: string; agentId: string } | null {
+  // Check cache first
+  if (conversationPathCache.has(conversationId)) {
+    return conversationPathCache.get(conversationId)!
+  }
+
+  // If not in cache, we'd need to scan all conversations
+  // For now, return null - callers should ensure conversations are loaded first
+  return null
+}
+
+/**
+ * Generate a title from the first user message
+ */
+export function generateTitleFromMessage(content: string): string {
+  // Strip newlines and truncate
+  const clean = content.replace(/\n/g, ' ').trim()
+  if (clean.length <= 50) {
+    return clean
+  }
+  return clean.substring(0, 47) + '...'
+}

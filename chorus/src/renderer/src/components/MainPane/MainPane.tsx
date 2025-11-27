@@ -1,6 +1,6 @@
 import { FileViewer } from './FileViewer'
 import { WorkspaceOverview } from './WorkspaceOverview'
-import { ChatPlaceholder } from './ChatPlaceholder'
+import { ChatView } from '../Chat'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 
 // SVG Icons
@@ -48,6 +48,13 @@ export function MainPane() {
   const selectedWorkspace = workspaces.find((ws) => ws.id === selectedWorkspaceId)
   const selectedAgent = selectedWorkspace?.agents.find((a) => a.id === selectedAgentId)
 
+  // Debug: Log state changes
+  console.log('[MainPane] workspaces count:', workspaces.length)
+  console.log('[MainPane] selectedWorkspaceId:', selectedWorkspaceId)
+  console.log('[MainPane] selectedAgentId:', selectedAgentId)
+  console.log('[MainPane] selectedWorkspace:', selectedWorkspace?.name || 'none')
+  console.log('[MainPane] selectedAgent:', selectedAgent?.name || 'none')
+
   // Determine what to show
   const renderContent = () => {
     // File is selected - show file viewer
@@ -55,9 +62,9 @@ export function MainPane() {
       return <FileViewer filePath={selectedFilePath} />
     }
 
-    // Agent is selected - show chat placeholder
-    if (selectedAgent) {
-      return <ChatPlaceholder agent={selectedAgent} />
+    // Agent is selected - show chat view
+    if (selectedAgent && selectedWorkspace) {
+      return <ChatView agent={selectedAgent} workspace={selectedWorkspace} />
     }
 
     // Workspace is selected - show overview

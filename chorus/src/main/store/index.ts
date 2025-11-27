@@ -1,7 +1,8 @@
 import Store from 'electron-store'
 import { v4 as uuidv4 } from 'uuid'
-import { basename, join } from 'path'
-import { app } from 'electron'
+import { basename, join, resolve } from 'path'
+import { existsSync, mkdirSync } from 'fs'
+import { migrateIfNeeded } from '../services/migration-service'
 
 // Types
 export interface Agent {
@@ -25,6 +26,8 @@ export interface Workspace {
 export interface ChorusSettings {
   rootWorkspaceDir: string
   theme: 'dark' | 'light'
+  chatSidebarCollapsed: boolean
+  chatSidebarWidth: number
 }
 
 interface StoreSchema {
@@ -34,21 +37,44 @@ interface StoreSchema {
 
 let store: Store<StoreSchema>
 
+/**
+ * Get the .chorus/ directory path in the project root (cc-slack/.chorus)
+ */
+export function getChorusDir(): string {
+  // In development, __dirname is chorus/out/main
+  // In production, it would be inside the app bundle
+  // We want cc-slack/.chorus (one level up from chorus/)
+  return resolve(__dirname, '../../../.chorus')
+}
+
+/**
+ * Ensure the .chorus/ directory exists
+ */
+function ensureChorusDir(): void {
+  const chorusDir = getChorusDir()
+  if (!existsSync(chorusDir)) {
+    mkdirSync(chorusDir, { recursive: true })
+    console.log('Created .chorus directory:', chorusDir)
+  }
+}
+
 export function initStore(): void {
-  const isDev = !app.isPackaged
+  // Ensure ~/.chorus/ directory exists
+  ensureChorusDir()
+
+  // Run migration if old data exists
+  migrateIfNeeded()
 
   store = new Store<StoreSchema>({
-    name: 'chorus-data',
-    // In development, store in project root for easy inspection
-    // In production, use default OS location
-    ...(isDev && {
-      cwd: join(__dirname, '..', '..', '..')
-    }),
+    name: 'config',
+    cwd: getChorusDir(),
     defaults: {
       workspaces: [],
       settings: {
         rootWorkspaceDir: '',
-        theme: 'dark'
+        theme: 'dark',
+        chatSidebarCollapsed: false,
+        chatSidebarWidth: 240
       }
     }
   })

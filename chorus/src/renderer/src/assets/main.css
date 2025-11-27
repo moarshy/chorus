@@ -90,6 +90,10 @@ body,
   color: var(--accent);
 }
 
+@utility bg-accent {
+  background-color: var(--accent);
+}
+
 @utility status-ready {
   color: var(--status-ready);
 }

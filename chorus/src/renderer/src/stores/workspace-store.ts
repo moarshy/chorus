@@ -27,7 +27,7 @@ interface WorkspaceStore {
   removeWorkspace: (id: string) => Promise<void>
   refreshWorkspace: (id: string) => Promise<void>
   selectWorkspace: (id: string | null) => void
-  selectAgent: (agentId: string | null) => void
+  selectAgent: (agentId: string | null, workspaceId?: string) => void
   selectFile: (filePath: string | null) => void
   toggleWorkspaceExpanded: (id: string) => void
   setRootWorkspaceDir: (path: string) => Promise<void>
@@ -47,21 +47,32 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   // Load all workspaces
   loadWorkspaces: async () => {
+    // Check if running in Electron context
+    if (!window.api) {
+      console.warn('[workspace-store] window.api not available - running in browser context')
+      set({ isLoading: false, error: 'Not running in Electron context' })
+      return
+    }
+
     set({ isLoading: true, error: null })
     try {
       const result = await window.api.workspace.list()
       if (result.success && result.data) {
+        console.log('[workspace-store] Loaded workspaces:', result.data.length)
         set({ workspaces: result.data, isLoading: false })
       } else {
         set({ error: result.error || 'Failed to load workspaces', isLoading: false })
       }
     } catch (error) {
+      console.error('[workspace-store] Failed to load workspaces:', error)
       set({ error: String(error), isLoading: false })
     }
   },
 
   // Load settings
   loadSettings: async () => {
+    if (!window.api) return
+
     try {
       const result = await window.api.settings.get()
       if (result.success && result.data) {
@@ -185,8 +196,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     })
   },
 
-  selectAgent: (agentId: string | null) => {
-    set({ selectedAgentId: agentId, selectedFilePath: null })
+  selectAgent: (agentId: string | null, workspaceId?: string) => {
+    // If workspaceId provided, also select the workspace
+    if (workspaceId) {
+      set({ selectedWorkspaceId: workspaceId, selectedAgentId: agentId, selectedFilePath: null })
+    } else {
+      set({ selectedAgentId: agentId, selectedFilePath: null })
+    }
   },
 
   selectFile: (filePath: string | null) => {
@@ -210,7 +226,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       if (result.success) {
         const { settings } = get()
         set({
-          settings: settings ? { ...settings, rootWorkspaceDir: path } : { rootWorkspaceDir: path, theme: 'dark' }
+          settings: settings
+            ? { ...settings, rootWorkspaceDir: path }
+            : { rootWorkspaceDir: path, theme: 'dark', chatSidebarCollapsed: false, chatSidebarWidth: 240 }
         })
       }
     } catch (error) {

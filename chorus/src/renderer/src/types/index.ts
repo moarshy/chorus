@@ -9,13 +9,23 @@ export type {
   GitCommit,
   CloneProgress,
   CloneResult,
-  ApiResult
+  ApiResult,
+  ContentBlock,
+  ConversationMessage,
+  Conversation,
+  AgentStreamDelta,
+  AgentMessageEvent,
+  AgentStatusEvent
 } from '../../../preload/index.d'
 
 // UI-specific types
 export type SidebarTab = 'workspaces' | 'files'
 
 export type MainPaneView = 'welcome' | 'workspace' | 'file' | 'agent'
+
+export type ChatSidebarTab = 'conversations' | 'details'
+
+export type AgentStatus = 'ready' | 'busy' | 'error'
 
 export interface FileTreeNode {
   id: string
