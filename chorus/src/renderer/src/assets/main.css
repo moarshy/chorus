@@ -1,0 +1,229 @@
+@import 'tailwindcss';
+
+/* Slack-like dark theme custom properties */
+:root {
+  --sidebar-bg: #1a1d21;
+  --main-bg: #222529;
+  --input-bg: #2c2f33;
+  --border-color: #383a3e;
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --accent: #4a9eff;
+  --accent-hover: #3b8ee6;
+  --status-ready: #22c55e;
+  --status-busy: #f59e0b;
+  --status-error: #ef4444;
+  --selected-bg: #1164a3;
+  --hover-bg: #27292d;
+}
+
+/* Base styles */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  background-color: var(--main-bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom utility classes */
+@utility bg-sidebar {
+  background-color: var(--sidebar-bg);
+}
+
+@utility bg-main {
+  background-color: var(--main-bg);
+}
+
+@utility bg-input {
+  background-color: var(--input-bg);
+}
+
+@utility bg-hover {
+  background-color: var(--hover-bg);
+}
+
+@utility bg-selected {
+  background-color: var(--selected-bg);
+}
+
+@utility border-default {
+  border-color: var(--border-color);
+}
+
+@utility text-primary {
+  color: var(--text-primary);
+}
+
+@utility text-secondary {
+  color: var(--text-secondary);
+}
+
+@utility text-muted {
+  color: var(--text-muted);
+}
+
+@utility text-accent {
+  color: var(--accent);
+}
+
+@utility status-ready {
+  color: var(--status-ready);
+}
+
+@utility status-busy {
+  color: var(--status-busy);
+}
+
+@utility status-error {
+  color: var(--status-error);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Tree view node styling for react-arborist */
+.tree-node {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.tree-node:hover {
+  background-color: var(--hover-bg);
+}
+
+.tree-node.selected {
+  background-color: var(--selected-bg);
+}
+
+/* Code block styling */
+.code-block {
+  font-family:
+    'SF Mono',
+    'Menlo',
+    'Monaco',
+    'Courier New',
+    monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Custom focus styles */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Button styles */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: var(--hover-bg);
+}
+
+/* Input styles */
+.input {
+  background-color: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Dialog overlay */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.dialog-content {
+  background-color: var(--main-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Draggable region for window title bar */
+.titlebar-drag-region {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
