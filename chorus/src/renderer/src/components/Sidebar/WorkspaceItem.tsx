@@ -56,7 +56,6 @@ export function WorkspaceItem({ workspace }: WorkspaceItemProps) {
   const isSelected = selectedWorkspaceId === workspace.id
 
   const handleClick = () => {
-    console.log('[WorkspaceItem] Clicked workspace:', workspace.name)
     selectWorkspace(workspace.id)
   }
 

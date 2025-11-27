@@ -48,13 +48,6 @@ export function MainPane() {
   const selectedWorkspace = workspaces.find((ws) => ws.id === selectedWorkspaceId)
   const selectedAgent = selectedWorkspace?.agents.find((a) => a.id === selectedAgentId)
 
-  // Debug: Log state changes
-  console.log('[MainPane] workspaces count:', workspaces.length)
-  console.log('[MainPane] selectedWorkspaceId:', selectedWorkspaceId)
-  console.log('[MainPane] selectedAgentId:', selectedAgentId)
-  console.log('[MainPane] selectedWorkspace:', selectedWorkspace?.name || 'none')
-  console.log('[MainPane] selectedAgent:', selectedAgent?.name || 'none')
-
   // Determine what to show
   const renderContent = () => {
     // File is selected - show file viewer

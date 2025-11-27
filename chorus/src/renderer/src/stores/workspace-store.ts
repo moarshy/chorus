@@ -197,14 +197,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   selectAgent: (agentId: string | null, workspaceId?: string) => {
-    console.log('[workspace-store] selectAgent called:', { agentId, workspaceId })
     // If workspaceId provided, also select the workspace
     if (workspaceId) {
       set({ selectedWorkspaceId: workspaceId, selectedAgentId: agentId, selectedFilePath: null })
-      console.log('[workspace-store] Set selectedWorkspaceId:', workspaceId, 'selectedAgentId:', agentId)
     } else {
       set({ selectedAgentId: agentId, selectedFilePath: null })
-      console.log('[workspace-store] Set selectedAgentId:', agentId)
     }
   },
 
