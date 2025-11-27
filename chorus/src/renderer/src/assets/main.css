@@ -1,7 +1,7 @@
-@import 'tailwindcss';
-
 /* Import Lato font from Google Fonts - Slack's interface font */
 @import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap');
+
+@import 'tailwindcss';
 
 /* Slack-like dark theme custom properties */
 :root {

@@ -37,7 +37,7 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
 }
 
-export function AgentItem({ agent }: AgentItemProps): JSX.Element {
+export function AgentItem({ agent }: AgentItemProps) {
   const { selectedAgentId, selectAgent } = useWorkspaceStore()
   const isSelected = selectedAgentId === agent.id
 

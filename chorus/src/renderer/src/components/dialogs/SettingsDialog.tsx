@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useUIStore } from '../../stores/ui-store'
 
-export function SettingsDialog(): JSX.Element {
+export function SettingsDialog() {
   const { settings, setRootWorkspaceDir } = useWorkspaceStore()
   const { closeSettings } = useUIStore()
   const [rootDir, setRootDir] = useState(settings?.rootWorkspaceDir || '')

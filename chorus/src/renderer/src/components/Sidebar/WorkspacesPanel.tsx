@@ -2,7 +2,7 @@ import { WorkspaceItem } from './WorkspaceItem'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useUIStore } from '../../stores/ui-store'
 
-export function WorkspacesPanel(): JSX.Element {
+export function WorkspacesPanel() {
   const { workspaces, isLoading, cloneProgress } = useWorkspaceStore()
   const { openAddWorkspace } = useUIStore()
 

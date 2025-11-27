@@ -6,7 +6,7 @@ import { AddWorkspaceDialog } from './components/dialogs/AddWorkspaceDialog'
 import { useWorkspaceStore } from './stores/workspace-store'
 import { useUIStore } from './stores/ui-store'
 
-function App(): JSX.Element {
+function App() {
   const { loadWorkspaces, loadSettings } = useWorkspaceStore()
   const { isSettingsOpen, isAddWorkspaceOpen } = useUIStore()
 

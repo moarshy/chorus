@@ -44,7 +44,7 @@ const DocumentIcon = () => (
   </svg>
 )
 
-export function WorkspaceItem({ workspace }: WorkspaceItemProps): JSX.Element {
+export function WorkspaceItem({ workspace }: WorkspaceItemProps) {
   const {
     selectedWorkspaceId,
     selectWorkspace,

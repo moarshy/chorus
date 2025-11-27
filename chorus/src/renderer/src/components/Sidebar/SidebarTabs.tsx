@@ -58,7 +58,7 @@ const tabs: { id: SidebarTab; icon: typeof WorkspacesIcon; label: string }[] = [
   { id: 'files', icon: FilesIcon, label: 'Files' }
 ]
 
-export function SidebarTabs(): JSX.Element {
+export function SidebarTabs() {
   const { sidebarTab, setSidebarTab, openSettings } = useUIStore()
 
   return (

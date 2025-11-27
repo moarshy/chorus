@@ -103,18 +103,29 @@ export function removeWorkspace(id: string): void {
 
 export function updateWorkspace(
   id: string,
-  updates: Partial<Omit<Workspace, 'id' | 'path' | 'name'>>
+  updates: {
+    gitBranch?: string | null
+    isDirty?: boolean
+    hasSystemPrompt?: boolean
+    isExpanded?: boolean
+    agents?: Omit<Agent, 'workspaceId'>[]
+  }
 ): Workspace | null {
   const workspaces = getWorkspaces()
   const index = workspaces.findIndex((ws) => ws.id === id)
   if (index === -1) return null
 
   const workspace = workspaces[index]
-  const updated = { ...workspace, ...updates }
 
-  // Ensure agents have correct workspaceId
-  if (updates.agents) {
-    updated.agents = updates.agents.map((a) => ({ ...a, workspaceId: id }))
+  // Build the updated workspace, converting agents to include workspaceId
+  const updated: Workspace = {
+    ...workspace,
+    gitBranch: updates.gitBranch !== undefined ? updates.gitBranch : workspace.gitBranch,
+    isDirty: updates.isDirty !== undefined ? updates.isDirty : workspace.isDirty,
+    hasSystemPrompt:
+      updates.hasSystemPrompt !== undefined ? updates.hasSystemPrompt : workspace.hasSystemPrompt,
+    isExpanded: updates.isExpanded !== undefined ? updates.isExpanded : workspace.isExpanded,
+    agents: updates.agents ? updates.agents.map((a) => ({ ...a, workspaceId: id })) : workspace.agents
   }
 
   workspaces[index] = updated

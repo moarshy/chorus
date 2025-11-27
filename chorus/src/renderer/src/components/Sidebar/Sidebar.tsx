@@ -3,7 +3,7 @@ import { WorkspacesPanel } from './WorkspacesPanel'
 import { FilesPanel } from './FilesPanel'
 import { useUIStore } from '../../stores/ui-store'
 
-export function Sidebar(): JSX.Element {
+export function Sidebar() {
   const { sidebarTab, sidebarWidth } = useUIStore()
 
   return (

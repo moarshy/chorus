@@ -4,7 +4,7 @@ import { useUIStore } from '../../stores/ui-store'
 
 type Mode = 'local' | 'clone'
 
-export function AddWorkspaceDialog(): JSX.Element {
+export function AddWorkspaceDialog() {
   const { addWorkspace, cloneWorkspace, error, clearError, settings } = useWorkspaceStore()
   const { closeAddWorkspace } = useUIStore()
 
