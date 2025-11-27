@@ -1,6 +1,7 @@
 import Store from 'electron-store'
 import { v4 as uuidv4 } from 'uuid'
-import { basename } from 'path'
+import { basename, join } from 'path'
+import { app } from 'electron'
 
 // Types
 export interface Agent {
@@ -34,8 +35,15 @@ interface StoreSchema {
 let store: Store<StoreSchema>
 
 export function initStore(): void {
+  const isDev = !app.isPackaged
+
   store = new Store<StoreSchema>({
     name: 'chorus-data',
+    // In development, store in project root for easy inspection
+    // In production, use default OS location
+    ...(isDev && {
+      cwd: join(__dirname, '..', '..', '..')
+    }),
     defaults: {
       workspaces: [],
       settings: {
@@ -44,6 +52,9 @@ export function initStore(): void {
       }
     }
   })
+
+  // Log store location for debugging
+  console.log('Store location:', store.path)
 }
 
 // ============================================

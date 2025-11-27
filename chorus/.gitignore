@@ -44,3 +44,6 @@ coverage/
 
 # Misc
 *.pem
+
+# Dev data store (stored in project root during development)
+chorus-data.json
