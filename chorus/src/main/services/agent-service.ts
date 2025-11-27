@@ -1,11 +1,16 @@
 import { spawn, ChildProcess, execSync } from 'child_process'
+import { existsSync } from 'fs'
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import {
   appendMessage,
   updateConversation,
   generateTitleFromMessage,
-  ConversationMessage
+  ConversationMessage,
+  ClaudeCodeMessage,
+  ClaudeAssistantMessage,
+  ClaudeUserMessage,
+  ClaudeResultMessage
 } from './conversation-service'
 
 // Store active processes per agent
@@ -50,6 +55,7 @@ export async function sendMessage(
   repoPath: string,
   message: string,
   sessionId: string | null,
+  agentFilePath: string | null,
   mainWindow: BrowserWindow
 ): Promise<void> {
   // Kill any existing process for this agent
@@ -63,6 +69,11 @@ export async function sendMessage(
 
   // Build claude command args
   const args = ['-p', '--verbose', '--output-format', 'stream-json']
+
+  // Add agent system prompt file if provided and exists
+  if (agentFilePath && existsSync(agentFilePath)) {
+    args.push('--system-prompt-file', agentFilePath)
+  }
 
   // Add session resume if we have one
   if (sessionId) {
@@ -130,6 +141,10 @@ export async function sendMessage(
     let streamingContent = ''
     let isFirstMessage = !sessionId // Track if this is the first message in conversation
     let hasSetTitle = false
+    // Collect all raw Claude Code messages for this turn
+    const rawClaudeMessages: ClaudeCodeMessage[] = []
+    let currentAssistantMessage: ClaudeAssistantMessage | null = null
+    let resultMessage: ClaudeResultMessage | null = null
 
     // Handle stdout - parse streaming JSON
     claudeProcess.stdout?.on('data', (data: Buffer) => {
@@ -144,62 +159,119 @@ export async function sendMessage(
         if (!line.trim()) continue
 
         try {
-          const event = JSON.parse(line)
+          // Parse as unknown first - not all events are stored message types
+          const event = JSON.parse(line) as Record<string, unknown>
+          const eventType = event.type as string
+
+          // Only store main message types (not streaming events like content_block_delta)
+          if (['system', 'assistant', 'user', 'result'].includes(eventType)) {
+            rawClaudeMessages.push(event as unknown as ClaudeCodeMessage)
+          }
 
           // Handle system init - capture session ID
-          if (event.type === 'system' && event.subtype === 'init') {
-            if (event.session_id) {
-              capturedSessionId = event.session_id
-              agentSessions.set(agentId, event.session_id)
-              // Update conversation with session ID
-              updateConversation(conversationId, { sessionId: event.session_id })
+          if (eventType === 'system' && event.subtype === 'init') {
+            const sessionId = event.session_id as string
+            capturedSessionId = sessionId
+            agentSessions.set(agentId, sessionId)
+            // Update conversation with session ID
+            updateConversation(conversationId, { sessionId })
+
+            // Store system init message
+            const systemMessage: ConversationMessage = {
+              uuid: uuidv4(),
+              type: 'system',
+              content: `Session started with model ${event.model as string}`,
+              timestamp: new Date().toISOString(),
+              sessionId,
+              claudeMessage: event as unknown as ClaudeCodeMessage
             }
+            appendMessage(conversationId, systemMessage)
           }
 
           // Handle assistant messages
-          if (event.type === 'assistant' && event.message?.content) {
-            for (const block of event.message.content) {
-              if (block.type === 'text') {
-                // Send stream delta for real-time display
-                mainWindow.webContents.send('agent:stream-delta', {
-                  conversationId,
-                  delta: block.text
-                })
-                streamingContent += block.text
-              } else if (block.type === 'tool_use') {
-                // Create tool use message
-                const toolMessage: ConversationMessage = {
-                  uuid: uuidv4(),
-                  type: 'tool_use',
-                  content: `Using tool: ${block.name}`,
-                  timestamp: new Date().toISOString(),
-                  toolName: block.name,
-                  toolInput: block.input
+          if (eventType === 'assistant') {
+            const assistantEvent = event as unknown as ClaudeAssistantMessage
+            if (assistantEvent.message?.content) {
+              currentAssistantMessage = assistantEvent
+
+              for (const block of assistantEvent.message.content) {
+                if (block.type === 'text') {
+                  // Send stream delta for real-time display
+                  mainWindow.webContents.send('agent:stream-delta', {
+                    conversationId,
+                    delta: block.text
+                  })
+                  streamingContent += block.text
+                } else if (block.type === 'tool_use') {
+                  // Create tool use message with raw Claude message attached
+                  const toolMessage: ConversationMessage = {
+                    uuid: uuidv4(),
+                    type: 'tool_use',
+                    content: `Using tool: ${block.name}`,
+                    timestamp: new Date().toISOString(),
+                    toolName: block.name,
+                    toolInput: block.input,
+                    claudeMessage: assistantEvent
+                  }
+                  appendMessage(conversationId, toolMessage)
+                  mainWindow.webContents.send('agent:message', {
+                    conversationId,
+                    message: toolMessage
+                  })
+                } else if (block.type === 'thinking') {
+                  // Handle thinking blocks (extended thinking models)
+                  mainWindow.webContents.send('agent:stream-delta', {
+                    conversationId,
+                    delta: `\n<thinking>${block.thinking}</thinking>\n`
+                  })
                 }
-                appendMessage(conversationId, toolMessage)
-                mainWindow.webContents.send('agent:message', {
-                  conversationId,
-                  message: toolMessage
-                })
               }
             }
           }
 
-          // Handle content block deltas (streaming text)
-          if (event.type === 'content_block_delta' && event.delta?.text) {
-            mainWindow.webContents.send('agent:stream-delta', {
-              conversationId,
-              delta: event.delta.text
-            })
-            streamingContent += event.delta.text
+          // Handle user messages (tool results)
+          if (eventType === 'user') {
+            const userEvent = event as unknown as ClaudeUserMessage
+            if (userEvent.message?.content) {
+              for (const block of userEvent.message.content) {
+                if (block.type === 'tool_result') {
+                  const toolResultMessage: ConversationMessage = {
+                    uuid: uuidv4(),
+                    type: 'tool_result',
+                    content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+                    timestamp: new Date().toISOString(),
+                    claudeMessage: userEvent
+                  }
+                  appendMessage(conversationId, toolResultMessage)
+                  mainWindow.webContents.send('agent:message', {
+                    conversationId,
+                    message: toolResultMessage
+                  })
+                }
+              }
+            }
           }
 
-          // Handle result event
-          if (event.type === 'result') {
-            if (event.session_id && !capturedSessionId) {
-              capturedSessionId = event.session_id
-              agentSessions.set(agentId, event.session_id)
-              updateConversation(conversationId, { sessionId: event.session_id })
+          // Handle content block deltas (streaming text) - this is a streaming event, not a stored message
+          if (eventType === 'content_block_delta' && event.delta) {
+            const delta = event.delta as { text?: string }
+            if (delta.text) {
+              mainWindow.webContents.send('agent:stream-delta', {
+                conversationId,
+                delta: delta.text
+              })
+              streamingContent += delta.text
+            }
+          }
+
+          // Handle result event - capture cost and session info
+          if (eventType === 'result') {
+            const resultEvent = event as unknown as ClaudeResultMessage
+            resultMessage = resultEvent
+            if (resultEvent.session_id && !capturedSessionId) {
+              capturedSessionId = resultEvent.session_id
+              agentSessions.set(agentId, resultEvent.session_id)
+              updateConversation(conversationId, { sessionId: resultEvent.session_id })
             }
           }
         } catch {
@@ -232,7 +304,15 @@ export async function sendMessage(
           type: 'assistant',
           content: streamingContent,
           timestamp: new Date().toISOString(),
-          sessionId: capturedSessionId || undefined
+          sessionId: capturedSessionId || undefined,
+          // Attach the raw assistant message if we captured one
+          claudeMessage: currentAssistantMessage || undefined,
+          // Include usage info from assistant message
+          inputTokens: currentAssistantMessage?.message?.usage?.input_tokens,
+          outputTokens: currentAssistantMessage?.message?.usage?.output_tokens,
+          // Include cost info from result message
+          costUsd: resultMessage?.total_cost_usd,
+          durationMs: resultMessage?.duration_ms
         }
         appendMessage(conversationId, assistantMessage)
         mainWindow.webContents.send('agent:message', {
@@ -246,6 +326,21 @@ export async function sendMessage(
           updateConversation(conversationId, { title })
           hasSetTitle = true
         }
+      }
+
+      // Store result message with session stats
+      if (resultMessage) {
+        const resultStoredMessage: ConversationMessage = {
+          uuid: uuidv4(),
+          type: 'system',
+          content: `Turn completed: ${resultMessage.num_turns} turns, $${resultMessage.total_cost_usd.toFixed(4)} USD, ${(resultMessage.duration_ms / 1000).toFixed(1)}s`,
+          timestamp: new Date().toISOString(),
+          sessionId: resultMessage.session_id,
+          claudeMessage: resultMessage,
+          costUsd: resultMessage.total_cost_usd,
+          durationMs: resultMessage.duration_ms
+        }
+        appendMessage(conversationId, resultStoredMessage)
       }
 
       if (code !== 0 && code !== null) {

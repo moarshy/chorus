@@ -44,8 +44,8 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
     // Clear input immediately
     setMessage('')
 
-    // Send message
-    await sendMessage(trimmed, workspace.id, agent.id, workspace.path)
+    // Send message with agent's system prompt file
+    await sendMessage(trimmed, workspace.id, agent.id, workspace.path, agent.filePath)
 
     // Refocus
     textareaRef.current?.focus()

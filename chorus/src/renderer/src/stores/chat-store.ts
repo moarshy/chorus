@@ -24,7 +24,7 @@ interface ChatStore {
   selectConversation: (conversationId: string | null) => Promise<void>
   createConversation: (workspaceId: string, agentId: string) => Promise<string | null>
   deleteConversation: (conversationId: string) => Promise<void>
-  sendMessage: (content: string, workspaceId: string, agentId: string, repoPath: string) => Promise<void>
+  sendMessage: (content: string, workspaceId: string, agentId: string, repoPath: string, agentFilePath?: string) => Promise<void>
   appendStreamDelta: (delta: string) => void
   appendMessage: (message: ConversationMessage) => void
   setAgentStatus: (status: AgentStatus) => void
@@ -139,7 +139,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   // Send a message to the agent
-  sendMessage: async (content: string, workspaceId: string, agentId: string, repoPath: string) => {
+  sendMessage: async (content: string, workspaceId: string, agentId: string, repoPath: string, agentFilePath?: string) => {
     let conversationId = get().activeConversationId
 
     // Create conversation if none active
@@ -160,7 +160,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       const sessionId = conversation?.sessionId || undefined
 
       // Send message - response comes via events
-      await window.api.agent.send(conversationId, content, repoPath, sessionId)
+      // Pass agentFilePath to load the agent's system prompt
+      await window.api.agent.send(conversationId, content, repoPath, sessionId, agentFilePath)
     } catch (error) {
       set({ isStreaming: false, error: String(error) })
     }

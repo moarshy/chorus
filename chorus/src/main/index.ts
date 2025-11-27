@@ -335,7 +335,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     'agent:send',
-    async (_event, conversationId: string, message: string, repoPath: string, sessionId?: string) => {
+    async (
+      _event,
+      conversationId: string,
+      message: string,
+      repoPath: string,
+      sessionId?: string,
+      agentFilePath?: string
+    ) => {
       try {
         if (!mainWindow) {
           return { success: false, error: 'Main window not available' }
@@ -351,7 +358,15 @@ app.whenReady().then(() => {
         const agentId = data?.conversation?.agentId || conversationId
 
         // Fire and forget - response comes via events
-        sendMessage(conversationId, agentId, repoPath, message, sessionId || null, mainWindow)
+        sendMessage(
+          conversationId,
+          agentId,
+          repoPath,
+          message,
+          sessionId || null,
+          agentFilePath || null,
+          mainWindow
+        )
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }

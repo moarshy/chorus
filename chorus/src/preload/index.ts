@@ -90,8 +90,14 @@ const api = {
 
   // Agent operations (for Claude CLI communication)
   agent: {
-    send: (conversationId: string, message: string, repoPath: string, sessionId?: string) =>
-      ipcRenderer.invoke('agent:send', conversationId, message, repoPath, sessionId),
+    send: (
+      conversationId: string,
+      message: string,
+      repoPath: string,
+      sessionId?: string,
+      agentFilePath?: string
+    ) =>
+      ipcRenderer.invoke('agent:send', conversationId, message, repoPath, sessionId, agentFilePath),
     stop: (agentId: string) =>
       ipcRenderer.invoke('agent:stop', agentId),
     checkAvailable: () =>

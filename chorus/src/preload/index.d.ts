@@ -40,9 +40,107 @@ interface ChorusSettings {
 }
 
 // ============================================
+// Claude Code Message Types (Raw Format)
+// ============================================
+
+// Content block types from Claude Code stream-json output
+interface TextBlock {
+  type: 'text'
+  text: string
+}
+
+interface ToolUseBlock {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+interface ToolResultBlock {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error: boolean
+}
+
+interface ThinkingBlock {
+  type: 'thinking'
+  thinking: string
+}
+
+interface ImageBlock {
+  type: 'image'
+  source: {
+    type: 'base64'
+    media_type: string
+    data: string
+  }
+}
+
+type ClaudeContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock | ImageBlock
+
+// Claude Code system init message
+interface ClaudeSystemMessage {
+  type: 'system'
+  subtype: 'init'
+  session_id: string
+  tools: string[]
+  mcp_servers: string[]
+  model: string
+  cwd: string
+  permissionMode: string
+}
+
+// Claude Code assistant message
+interface ClaudeAssistantMessage {
+  type: 'assistant'
+  message: {
+    id: string
+    type: 'message'
+    role: 'assistant'
+    content: ClaudeContentBlock[]
+    model: string
+    stop_reason: string
+    stop_sequence: string | null
+    usage: {
+      input_tokens: number
+      output_tokens: number
+      cache_creation_input_tokens: number
+      cache_read_input_tokens: number
+    }
+  }
+}
+
+// Claude Code user message (tool results)
+interface ClaudeUserMessage {
+  type: 'user'
+  message: {
+    role: 'user'
+    content: ClaudeContentBlock[]
+  }
+}
+
+// Claude Code result message
+interface ClaudeResultMessage {
+  type: 'result'
+  result: string
+  subtype: 'success' | 'error'
+  session_id: string
+  total_cost_usd: number
+  duration_ms: number
+  duration_api_ms: number
+  num_turns: number
+  is_error: boolean
+}
+
+// Union of all Claude Code message types
+type ClaudeCodeMessage = ClaudeSystemMessage | ClaudeAssistantMessage | ClaudeUserMessage | ClaudeResultMessage
+
+// ============================================
 // Conversation Types
 // ============================================
 
+// Simplified content block for display
 interface ContentBlock {
   type: 'text' | 'tool_use' | 'tool_result'
   text?: string
@@ -50,6 +148,7 @@ interface ContentBlock {
   input?: Record<string, unknown>
 }
 
+// Stored message format - includes both raw Claude message and display-friendly data
 interface ConversationMessage {
   uuid: string
   type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'error' | 'system'
@@ -58,6 +157,13 @@ interface ConversationMessage {
   sessionId?: string
   toolName?: string
   toolInput?: Record<string, unknown>
+  // Raw Claude Code message (preserved exactly as received)
+  claudeMessage?: ClaudeCodeMessage
+  // Metadata from result messages
+  costUsd?: number
+  durationMs?: number
+  inputTokens?: number
+  outputTokens?: number
 }
 
 interface Conversation {
@@ -176,7 +282,7 @@ interface ConversationAPI {
 }
 
 interface AgentAPI {
-  send: (conversationId: string, message: string, repoPath: string, sessionId?: string) => Promise<ApiResult>
+  send: (conversationId: string, message: string, repoPath: string, sessionId?: string, agentFilePath?: string) => Promise<ApiResult>
   stop: (agentId: string) => Promise<ApiResult>
   checkAvailable: () => Promise<ApiResult<string | null>>
   onStreamDelta: (callback: (event: AgentStreamDelta) => void) => () => void
@@ -224,5 +330,17 @@ export type {
   Conversation,
   AgentStreamDelta,
   AgentMessageEvent,
-  AgentStatusEvent
+  AgentStatusEvent,
+  // Claude Code message types
+  TextBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  ThinkingBlock,
+  ImageBlock,
+  ClaudeContentBlock,
+  ClaudeSystemMessage,
+  ClaudeAssistantMessage,
+  ClaudeUserMessage,
+  ClaudeResultMessage,
+  ClaudeCodeMessage
 }

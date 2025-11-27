@@ -15,7 +15,19 @@ export type {
   Conversation,
   AgentStreamDelta,
   AgentMessageEvent,
-  AgentStatusEvent
+  AgentStatusEvent,
+  // Claude Code message types
+  TextBlock,
+  ToolUseBlock,
+  ToolResultBlock,
+  ThinkingBlock,
+  ImageBlock,
+  ClaudeContentBlock,
+  ClaudeSystemMessage,
+  ClaudeAssistantMessage,
+  ClaudeUserMessage,
+  ClaudeResultMessage,
+  ClaudeCodeMessage
 } from '../../../preload/index.d'
 
 // UI-specific types

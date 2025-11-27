@@ -1,6 +1,6 @@
 import Store from 'electron-store'
 import { v4 as uuidv4 } from 'uuid'
-import { basename, join, resolve } from 'path'
+import { basename, resolve } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 import { migrateIfNeeded } from '../services/migration-service'
 

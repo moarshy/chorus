@@ -4,9 +4,107 @@ import { v4 as uuidv4 } from 'uuid'
 import { getChorusDir } from '../store'
 
 // ============================================
-// Types
+// Claude Code Message Types (Raw Format)
 // ============================================
 
+// Content block types from Claude Code stream-json output
+export interface TextBlock {
+  type: 'text'
+  text: string
+}
+
+export interface ToolUseBlock {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: Record<string, unknown>
+}
+
+export interface ToolResultBlock {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error: boolean
+}
+
+export interface ThinkingBlock {
+  type: 'thinking'
+  thinking: string
+}
+
+export interface ImageBlock {
+  type: 'image'
+  source: {
+    type: 'base64'
+    media_type: string
+    data: string
+  }
+}
+
+export type ClaudeContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock | ImageBlock
+
+// Claude Code system init message
+export interface ClaudeSystemMessage {
+  type: 'system'
+  subtype: 'init'
+  session_id: string
+  tools: string[]
+  mcp_servers: string[]
+  model: string
+  cwd: string
+  permissionMode: string
+}
+
+// Claude Code assistant message
+export interface ClaudeAssistantMessage {
+  type: 'assistant'
+  message: {
+    id: string
+    type: 'message'
+    role: 'assistant'
+    content: ClaudeContentBlock[]
+    model: string
+    stop_reason: string
+    stop_sequence: string | null
+    usage: {
+      input_tokens: number
+      output_tokens: number
+      cache_creation_input_tokens: number
+      cache_read_input_tokens: number
+    }
+  }
+}
+
+// Claude Code user message (tool results)
+export interface ClaudeUserMessage {
+  type: 'user'
+  message: {
+    role: 'user'
+    content: ClaudeContentBlock[]
+  }
+}
+
+// Claude Code result message
+export interface ClaudeResultMessage {
+  type: 'result'
+  result: string
+  subtype: 'success' | 'error'
+  session_id: string
+  total_cost_usd: number
+  duration_ms: number
+  duration_api_ms: number
+  num_turns: number
+  is_error: boolean
+}
+
+// Union of all Claude Code message types
+export type ClaudeCodeMessage = ClaudeSystemMessage | ClaudeAssistantMessage | ClaudeUserMessage | ClaudeResultMessage
+
+// ============================================
+// Conversation Types
+// ============================================
+
+// Simplified content block for display
 export interface ContentBlock {
   type: 'text' | 'tool_use' | 'tool_result'
   text?: string
@@ -14,6 +112,7 @@ export interface ContentBlock {
   input?: Record<string, unknown>
 }
 
+// Stored message format - includes both raw Claude message and display-friendly data
 export interface ConversationMessage {
   uuid: string
   type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'error' | 'system'
@@ -22,6 +121,13 @@ export interface ConversationMessage {
   sessionId?: string
   toolName?: string
   toolInput?: Record<string, unknown>
+  // Raw Claude Code message (preserved exactly as received)
+  claudeMessage?: ClaudeCodeMessage
+  // Metadata from result messages
+  costUsd?: number
+  durationMs?: number
+  inputTokens?: number
+  outputTokens?: number
 }
 
 export interface Conversation {
