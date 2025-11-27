@@ -5,12 +5,12 @@ import type { SidebarTab } from '../../types'
 const WorkspacesIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
-    width="20"
-    height="20"
+    width="15"
+    height="15"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="2.5"
     strokeLinecap="round"
     strokeLinejoin="round"
   >
@@ -22,12 +22,12 @@ const WorkspacesIcon = ({ className }: { className?: string }) => (
 const FilesIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
-    width="20"
-    height="20"
+    width="15"
+    height="15"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="2.5"
     strokeLinecap="round"
     strokeLinejoin="round"
   >
@@ -39,12 +39,12 @@ const FilesIcon = ({ className }: { className?: string }) => (
 const SettingsIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
-    width="18"
-    height="18"
+    width="14"
+    height="14"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="2.5"
     strokeLinecap="round"
     strokeLinejoin="round"
   >
@@ -62,8 +62,8 @@ export function SidebarTabs() {
   const { sidebarTab, setSidebarTab, openSettings } = useUIStore()
 
   return (
-    <div className="flex items-center justify-between px-2 py-2 border-b border-default">
-      <div className="flex gap-1">
+    <div className="flex items-center justify-between px-1.5 py-1.5 border-b border-default">
+      <div className="flex gap-0.5">
         {tabs.map((tab) => {
           const Icon = tab.icon
           return (
@@ -71,7 +71,7 @@ export function SidebarTabs() {
               key={tab.id}
               onClick={() => setSidebarTab(tab.id)}
               className={`
-                p-2 rounded transition-colors titlebar-no-drag
+                p-1.5 rounded transition-colors titlebar-no-drag
                 ${sidebarTab === tab.id ? 'bg-selected text-primary' : 'text-secondary hover:bg-hover hover:text-primary'}
               `}
               title={tab.label}
@@ -83,7 +83,7 @@ export function SidebarTabs() {
       </div>
       <button
         onClick={openSettings}
-        className="p-2 rounded text-secondary hover:bg-hover hover:text-primary titlebar-no-drag"
+        className="p-1.5 rounded text-secondary hover:bg-hover hover:text-primary titlebar-no-drag"
         title="Settings"
       >
         <SettingsIcon />
