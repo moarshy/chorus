@@ -10,7 +10,8 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 |--------|--------|---------|
 | **0-chorus-setup** | ✅ Complete | Foundation: Electron app, two-pane layout, workspace management, file browser, git integration |
 | **1-claude-code-integration** | ✅ Complete | Claude Code agent spawning, streaming output, conversation storage |
-| **Git branch switching** | ✅ Complete | Branch selector in sidebar + branch list in workspace overview, checkout support |
+| **Git branch switching** | ✅ Complete | Branch selector in sidebar, 5-column commits grid in workspace overview, checkout support |
+| **Markdown rendering** | ✅ Complete | Chat messages render markdown, code blocks with syntax highlighting, mermaid diagrams |
 
 **Before implementing**: Read the relevant spec files for requirements and implementation guidance.
 
@@ -57,7 +58,11 @@ chorus/
 
 **Conversation Storage**: Each conversation has an index entry in `conversations.json` and messages in `{conversationId}-messages.jsonl`. Raw Claude Code messages are preserved in the `claudeMessage` field for session resumption.
 
-**Git Branch Switching**: Users can switch branches via `BranchSelector` dropdown in sidebar or `BranchList` pills in workspace overview. Both local and remote branches are shown. Checking out a remote branch creates a local tracking branch. The `git-service.ts` exposes `listBranches()` and `checkout()` operations.
+**Markdown Rendering**: Chat uses `react-markdown` + `remark-gfm` for markdown, `prism-react-renderer` for code syntax highlighting, and `mermaid` (lazy-loaded) for diagrams. Components: `MarkdownContent.tsx`, `CodeBlock.tsx`, `MermaidDiagram.tsx`.
+
+**Stable Agent IDs**: Agent IDs are deterministic hashes of the file path (SHA-256), not random UUIDs. This ensures conversations stay linked to agents when workspaces are refreshed. Note: renaming/moving an agent `.md` file creates a new ID (orphaning old conversations). Content changes are fine. See `generateStableId()` in `workspace-service.ts`.
+
+**Git Branch Switching**: Users can switch branches via `BranchSelector` dropdown in sidebar or `BranchCommitsGrid` in workspace overview. The grid shows 5 branches with 10 commits each, with pagination arrows. Both local and remote branches are shown. Checking out a remote branch creates a local tracking branch.
 
 ## Development
 
@@ -78,7 +83,9 @@ bun run typecheck  # Type check all code
 - `chorus/src/main/services/git-service.ts` - Git operations (status, branches, checkout, clone)
 - `chorus/src/renderer/src/stores/workspace-store.ts` - Main UI state
 - `chorus/src/renderer/src/components/Sidebar/BranchSelector.tsx` - Branch dropdown in sidebar
-- `chorus/src/renderer/src/components/MainPane/BranchList.tsx` - Branch pills in workspace overview
+- `chorus/src/renderer/src/components/MainPane/BranchCommitsGrid.tsx` - 5-column branch/commits grid
+- `chorus/src/renderer/src/components/Chat/MarkdownContent.tsx` - Markdown renderer for chat
+- `chorus/src/main/services/workspace-service.ts` - Agent discovery with stable IDs
 - `chorus/src/preload/index.ts` - API surface exposed to renderer
 - `chorus/src/preload/index.d.ts` - Type definitions including Claude Code message types
 - `docs/3-tools/claude-code/message-format.md` - Claude Code stream-json format documentation

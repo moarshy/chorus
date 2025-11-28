@@ -1,8 +1,18 @@
 import { existsSync, readdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import { createHash } from 'crypto'
 import { getBranch, getStatus } from './git-service'
 import type { Agent } from '../store'
+
+/**
+ * Generate a stable UUID-like ID from a string (e.g., file path)
+ * Uses SHA-256 hash truncated to UUID format
+ */
+function generateStableId(input: string): string {
+  const hash = createHash('sha256').update(input).digest('hex')
+  // Format as UUID: 8-4-4-4-12
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
+}
 
 /**
  * Validates if the given path is a git repository
@@ -34,7 +44,7 @@ export async function discoverAgents(repoPath: string): Promise<Omit<Agent, 'wor
         if (stats.isFile()) {
           const name = basename(file, '.md')
           agents.push({
-            id: uuidv4(),
+            id: generateStableId(filePath),
             name,
             filePath
           })
