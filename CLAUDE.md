@@ -10,6 +10,7 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 |--------|--------|---------|
 | **0-chorus-setup** | ✅ Complete | Foundation: Electron app, two-pane layout, workspace management, file browser, git integration |
 | **1-claude-code-integration** | ✅ Complete | Claude Code agent spawning, streaming output, conversation storage |
+| **Git branch switching** | ✅ Complete | Branch selector in sidebar + branch list in workspace overview, checkout support |
 
 **Before implementing**: Read the relevant spec files for requirements and implementation guidance.
 
@@ -56,6 +57,8 @@ chorus/
 
 **Conversation Storage**: Each conversation has an index entry in `conversations.json` and messages in `{conversationId}-messages.jsonl`. Raw Claude Code messages are preserved in the `claudeMessage` field for session resumption.
 
+**Git Branch Switching**: Users can switch branches via `BranchSelector` dropdown in sidebar or `BranchList` pills in workspace overview. Both local and remote branches are shown. Checking out a remote branch creates a local tracking branch. The `git-service.ts` exposes `listBranches()` and `checkout()` operations.
+
 ## Development
 
 ```bash
@@ -72,7 +75,10 @@ bun run typecheck  # Type check all code
 - `chorus/src/main/store/index.ts` - Data persistence schema
 - `chorus/src/main/services/agent-service.ts` - Claude CLI spawning, streaming JSON parsing
 - `chorus/src/main/services/conversation-service.ts` - Conversation CRUD, JSONL message storage
+- `chorus/src/main/services/git-service.ts` - Git operations (status, branches, checkout, clone)
 - `chorus/src/renderer/src/stores/workspace-store.ts` - Main UI state
+- `chorus/src/renderer/src/components/Sidebar/BranchSelector.tsx` - Branch dropdown in sidebar
+- `chorus/src/renderer/src/components/MainPane/BranchList.tsx` - Branch pills in workspace overview
 - `chorus/src/preload/index.ts` - API surface exposed to renderer
 - `chorus/src/preload/index.d.ts` - Type definitions including Claude Code message types
 - `docs/3-tools/claude-code/message-format.md` - Claude Code stream-json format documentation

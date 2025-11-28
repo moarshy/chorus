@@ -7,6 +7,7 @@ export type {
   GitChange,
   GitStatus,
   GitCommit,
+  GitBranch,
   CloneProgress,
   CloneResult,
   ApiResult,

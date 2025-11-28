@@ -234,3 +234,96 @@ body,
 .titlebar-no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* Markdown prose styles for chat messages */
+.prose-chat {
+  color: inherit;
+  line-height: 1.6;
+}
+
+.prose-chat > *:first-child {
+  margin-top: 0;
+}
+
+.prose-chat > *:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat strong {
+  font-weight: 700;
+}
+
+.prose-chat em {
+  font-style: italic;
+}
+
+.prose-chat a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.prose-chat a:hover {
+  text-decoration: underline;
+}
+
+/* Inline code in prose */
+.prose-chat code:not(.code-block *) {
+  background-color: var(--sidebar-bg);
+  color: var(--accent);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+/* Table styling in prose */
+.prose-chat table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.prose-chat th {
+  background-color: var(--sidebar-bg);
+  font-weight: 600;
+}
+
+.prose-chat tr:nth-child(even) {
+  background-color: var(--sidebar-bg);
+}
+
+/* Blockquote styling */
+.prose-chat blockquote {
+  border-left: 4px solid var(--accent);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* List styling */
+.prose-chat ul,
+.prose-chat ol {
+  padding-left: 0;
+}
+
+.prose-chat li {
+  margin-bottom: 0.25rem;
+}
+
+.prose-chat li::marker {
+  color: var(--text-muted);
+}
+
+/* Horizontal rule */
+.prose-chat hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 1rem 0;
+}

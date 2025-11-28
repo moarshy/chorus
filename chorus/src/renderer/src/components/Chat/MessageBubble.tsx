@@ -1,5 +1,6 @@
 import type { ConversationMessage } from '../../types'
 import { ToolUseIndicator } from './ToolUseIndicator'
+import { MarkdownContent } from './MarkdownContent'
 
 interface MessageBubbleProps {
   message: ConversationMessage
@@ -66,9 +67,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     return (
       <div className="flex gap-3 justify-end">
         <div className="bg-accent rounded-lg rounded-tr-none px-4 py-3 max-w-[80%]">
-          <pre className="whitespace-pre-wrap font-sans text-sm text-white">
-            {String(content)}
-          </pre>
+          <MarkdownContent content={String(content)} className="text-sm text-white" />
           <p className="text-xs text-white/60 mt-1 text-right">{formatTime(timestamp)}</p>
         </div>
         <div className="w-8 h-8 rounded-lg bg-accent/30 flex items-center justify-center text-accent shrink-0">
@@ -86,9 +85,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <SparklesIcon />
         </div>
         <div className="bg-input rounded-lg rounded-tl-none px-4 py-3 max-w-[80%]">
-          <pre className="whitespace-pre-wrap font-sans text-sm text-white">
-            {String(content)}
-          </pre>
+          <MarkdownContent content={String(content)} className="text-sm text-white" />
           <p className="text-xs text-muted mt-1">{formatTime(timestamp)}</p>
         </div>
       </div>

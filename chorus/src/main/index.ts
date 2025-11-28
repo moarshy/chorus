@@ -22,7 +22,7 @@ import {
   getWorkspaceInfo
 } from './services/workspace-service'
 import { listDirectory, readFile } from './services/fs-service'
-import { isRepo, getStatus, getBranch, getLog, clone, cancelClone, listBranches, checkout } from './services/git-service'
+import { isRepo, getStatus, getBranch, getLog, getLogForBranch, clone, cancelClone, listBranches, checkout } from './services/git-service'
 import {
   listConversations,
   createConversation,
@@ -261,6 +261,15 @@ app.whenReady().then(() => {
   ipcMain.handle('git:log', async (_event, path: string, count = 10) => {
     try {
       const result = await getLog(path, count)
+      return { success: true, data: result }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:log-branch', async (_event, path: string, branch: string, count = 10) => {
+    try {
+      const result = await getLogForBranch(path, branch, count)
       return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }

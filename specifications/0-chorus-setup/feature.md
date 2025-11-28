@@ -652,3 +652,29 @@ Legend:
 [main] = git branch name
 [*] = Has uncommitted changes
 ```
+
+---
+
+## Post-Implementation Addendum
+
+### Branch Switching (Added 2025-11-28)
+
+The "Branch switching from UI" item originally listed under "Future Considerations" has been implemented:
+
+**Features:**
+- `BranchSelector` dropdown in sidebar workspace items - click branch name to see all branches
+- `BranchList` pill badges in MainPane workspace overview - shows up to 5 branches with "+N more" overflow
+- Support for both local and remote branches (remote shown with dashed border)
+- Checking out a remote branch automatically creates a local tracking branch
+
+**Files Added:**
+- `chorus/src/renderer/src/components/Sidebar/BranchSelector.tsx`
+- `chorus/src/renderer/src/components/MainPane/BranchList.tsx`
+
+**Git Service Updates:**
+- `listBranches(path)` - Returns all local and remote branches
+- `checkout(path, branch)` - Switches branch, handles remote-to-local tracking
+
+**IPC Channels Added:**
+- `git:list-branches` → `GitBranch[]`
+- `git:checkout` → void

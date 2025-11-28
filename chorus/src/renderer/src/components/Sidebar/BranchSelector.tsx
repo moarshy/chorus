@@ -54,7 +54,9 @@ export function BranchSelector({ currentBranch, workspacePath, onBranchChange }:
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -93,6 +95,14 @@ export function BranchSelector({ currentBranch, workspacePath, onBranchChange }:
   const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!isOpen) {
+      // Calculate position based on button location
+      if (buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect()
+        setDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left
+        })
+      }
       setIsOpen(true)
       await loadBranches()
     } else {
@@ -136,6 +146,7 @@ export function BranchSelector({ currentBranch, workspacePath, onBranchChange }:
     <div className="relative" ref={dropdownRef}>
       {/* Branch button */}
       <button
+        ref={buttonRef}
         onClick={handleToggle}
         disabled={isCheckingOut}
         className="flex items-center gap-1.5 text-xs text-muted hover:text-secondary transition-colors group"
@@ -157,7 +168,10 @@ export function BranchSelector({ currentBranch, workspacePath, onBranchChange }:
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 z-50 bg-main border border-default rounded-lg shadow-xl py-1 min-w-48 max-w-64 max-h-80 overflow-y-auto">
+        <div
+          className="fixed z-50 bg-main border border-default rounded-lg shadow-xl py-1 min-w-48 max-w-64 max-h-80 overflow-y-auto"
+          style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+        >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2 py-4 text-muted">
               <LoadingSpinner />

@@ -62,6 +62,7 @@ const api = {
     listBranches: (path: string) => ipcRenderer.invoke('git:list-branches', path),
     checkout: (path: string, branch: string) => ipcRenderer.invoke('git:checkout', path, branch),
     log: (path: string, count?: number) => ipcRenderer.invoke('git:log', path, count),
+    logForBranch: (path: string, branch: string, count?: number) => ipcRenderer.invoke('git:log-branch', path, branch, count),
     clone: (url: string, targetDir: string) => ipcRenderer.invoke('git:clone', url, targetDir),
     cancelClone: () => ipcRenderer.invoke('git:cancel-clone'),
 

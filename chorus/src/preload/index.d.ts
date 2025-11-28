@@ -276,6 +276,7 @@ interface GitAPI {
   listBranches: (path: string) => Promise<ApiResult<GitBranch[]>>
   checkout: (path: string, branch: string) => Promise<ApiResult>
   log: (path: string, count?: number) => Promise<ApiResult<GitCommit[]>>
+  logForBranch: (path: string, branch: string, count?: number) => Promise<ApiResult<GitCommit[]>>
   clone: (url: string, targetDir: string) => Promise<ApiResult>
   cancelClone: () => Promise<ApiResult>
   onCloneProgress: (callback: (progress: CloneProgress) => void) => () => void

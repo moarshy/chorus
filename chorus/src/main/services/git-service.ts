@@ -111,6 +111,33 @@ export async function getLog(path: string, count: number = 10): Promise<GitCommi
 }
 
 /**
+ * Get commits for a specific branch
+ */
+export async function getLogForBranch(
+  path: string,
+  branch: string,
+  count: number = 10
+): Promise<GitCommit[]> {
+  try {
+    // Use format to get hash, message, author, and date
+    const output = runGit(path, `log ${branch} -n ${count} --format="%H|%s|%an|%ai"`)
+    const lines = output.split('\n').filter(Boolean)
+
+    return lines.map((line) => {
+      const [hash, message, author, date] = line.split('|')
+      return {
+        hash,
+        message,
+        author,
+        date
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+/**
  * Clone a repository with progress tracking
  */
 export async function clone(

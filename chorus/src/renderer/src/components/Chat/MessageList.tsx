@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useChatStore } from '../../stores/chat-store'
 import { MessageBubble } from './MessageBubble'
+import { MarkdownContent } from './MarkdownContent'
 
 // SVG Icons
 const SparklesIcon = () => (
@@ -59,10 +60,10 @@ export function MessageList() {
             <SparklesIcon />
           </div>
           <div className="bg-input rounded-lg rounded-tl-none px-4 py-3 max-w-[80%]">
-            <pre className="whitespace-pre-wrap font-sans text-sm text-white">
-              {streamingContent}
+            <div className="text-sm text-white">
+              <MarkdownContent content={streamingContent} />
               <span className="inline-block w-2 h-4 bg-accent/50 animate-pulse ml-0.5" />
-            </pre>
+            </div>
           </div>
         </div>
       )}

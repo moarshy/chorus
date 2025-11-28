@@ -1,5 +1,5 @@
-import { GitPanel } from './GitPanel'
-import { BranchList } from './BranchList'
+import { ChangesPanel } from './ChangesPanel'
+import { BranchCommitsGrid } from './BranchCommitsGrid'
 import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import type { Workspace } from '../../types'
@@ -101,13 +101,15 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
         )}
       </div>
 
-      {/* Branches section */}
+      {/* Uncommitted changes section */}
+      {workspace.gitBranch && (
+        <ChangesPanel workspacePath={workspace.path} />
+      )}
+
+      {/* Branches with commits grid */}
       {workspace.gitBranch && (
         <div className="mb-8">
-          <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">
-            Branches
-          </h2>
-          <BranchList
+          <BranchCommitsGrid
             workspacePath={workspace.path}
             onBranchChange={handleBranchChange}
           />
@@ -162,16 +164,7 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
         )}
       </div>
 
-      {/* Git section */}
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">
-          Git Activity
-        </h2>
-        <div className="rounded-lg bg-input border border-default p-4">
-          <GitPanel workspacePath={workspace.path} />
-        </div>
-      </div>
-
+      
       {/* Quick actions */}
       <div className="flex gap-3">
         <button
