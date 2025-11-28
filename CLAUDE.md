@@ -12,6 +12,8 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 | **1-claude-code-integration** | ✅ Complete | Claude Code agent spawning, streaming output, conversation storage |
 | **Git branch switching** | ✅ Complete | Branch selector in sidebar, 5-column commits grid in workspace overview, checkout support |
 | **Markdown rendering** | ✅ Complete | Chat messages render markdown, code blocks with syntax highlighting, mermaid diagrams |
+| **Tool calls UI** | ✅ Complete | Consecutive tool calls grouped into collapsible sections with input/output display |
+| **Multi-conversation support** | ✅ Complete | Unread badges, per-agent status tracking (Busy/Error), parallel agent conversations |
 
 **Before implementing**: Read the relevant spec files for requirements and implementation guidance.
 
@@ -63,6 +65,8 @@ chorus/
 **Stable Agent IDs**: Agent IDs are deterministic hashes of the file path (SHA-256), not random UUIDs. This ensures conversations stay linked to agents when workspaces are refreshed. Note: renaming/moving an agent `.md` file creates a new ID (orphaning old conversations). Content changes are fine. See `generateStableId()` in `workspace-service.ts`.
 
 **Git Branch Switching**: Users can switch branches via `BranchSelector` dropdown in sidebar or `BranchCommitsGrid` in workspace overview. The grid shows 5 branches with 10 commits each, with pagination arrows. Both local and remote branches are shown. Checking out a remote branch creates a local tracking branch.
+
+**Multi-Agent Conversations**: Multiple agents can run simultaneously. State is tracked per-conversation (`streamingConversationId`) and per-agent (`agentStatuses` Map). Unread counts are tracked per-conversation and aggregated per-agent. Components: `ToolCallsGroup.tsx`, `AgentItem.tsx`, `ConversationItem.tsx`.
 
 ## Development
 
