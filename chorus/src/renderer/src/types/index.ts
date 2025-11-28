@@ -28,7 +28,11 @@ export type {
   ClaudeAssistantMessage,
   ClaudeUserMessage,
   ClaudeResultMessage,
-  ClaudeCodeMessage
+  ClaudeCodeMessage,
+  // Conversation settings types
+  PermissionMode,
+  ConversationSettings,
+  WorkspaceSettings
 } from '../../../preload/index.d'
 
 // UI-specific types

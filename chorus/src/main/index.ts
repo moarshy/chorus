@@ -27,7 +27,9 @@ import {
   listConversations,
   createConversation,
   loadConversation,
-  deleteConversation
+  deleteConversation,
+  updateConversationSettings,
+  ConversationSettings
 } from './services/conversation-service'
 import {
   sendMessage,
@@ -36,6 +38,12 @@ import {
   getSessionId,
   clearSession
 } from './services/agent-service'
+import {
+  getWorkspaceSettings,
+  setWorkspaceSettings,
+  hasWorkspaceSettings,
+  WorkspaceSettings
+} from './services/workspace-settings-service'
 
 // Store reference to main window for IPC events
 let mainWindow: BrowserWindow | null = null
@@ -334,9 +342,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('conversation:create', async (_event, workspaceId: string, agentId: string) => {
+  ipcMain.handle('conversation:create', async (_event, workspaceId: string, agentId: string, workspacePath?: string) => {
     try {
-      const conversation = createConversation(workspaceId, agentId)
+      const conversation = createConversation(workspaceId, agentId, workspacePath)
       return { success: true, data: conversation }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -356,6 +364,18 @@ app.whenReady().then(() => {
     try {
       deleteConversation(conversationId)
       return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('conversation:update-settings', async (_event, conversationId: string, settings: Partial<ConversationSettings>) => {
+    try {
+      const conversation = updateConversationSettings(conversationId, settings)
+      if (!conversation) {
+        return { success: false, error: 'Conversation not found' }
+      }
+      return { success: true, data: conversation }
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -383,15 +403,14 @@ app.whenReady().then(() => {
         if (!mainWindow) {
           return { success: false, error: 'Main window not available' }
         }
-        // Extract agentId from the conversation context
-        // For now, we'll derive it from the conversationId
-        // The sendMessage function handles the actual agent communication
+        // Extract agentId and settings from the conversation context
         const { data } = await (async () => {
           const result = loadConversation(conversationId)
           return { data: result }
         })()
 
         const agentId = data?.conversation?.agentId || conversationId
+        const settings = data?.conversation?.settings
 
         // Fire and forget - response comes via events
         sendMessage(
@@ -401,7 +420,8 @@ app.whenReady().then(() => {
           message,
           sessionId || null,
           agentFilePath || null,
-          mainWindow
+          mainWindow,
+          settings
         )
         return { success: true }
       } catch (error) {
@@ -441,6 +461,37 @@ app.whenReady().then(() => {
     try {
       clearSession(agentId)
       return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // ============================================
+  // WORKSPACE SETTINGS IPC HANDLERS
+  // ============================================
+
+  ipcMain.handle('workspace-settings:get', async (_event, workspacePath: string) => {
+    try {
+      const settings = getWorkspaceSettings(workspacePath)
+      return { success: true, data: settings }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('workspace-settings:set', async (_event, workspacePath: string, settings: Partial<WorkspaceSettings>) => {
+    try {
+      const updated = setWorkspaceSettings(workspacePath, settings)
+      return { success: true, data: updated }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('workspace-settings:has', async (_event, workspacePath: string) => {
+    try {
+      const has = hasWorkspaceSettings(workspacePath)
+      return { success: true, data: has }
     } catch (error) {
       return { success: false, error: String(error) }
     }

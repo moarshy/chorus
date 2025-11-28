@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, unl
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { getChorusDir } from '../store'
+import { getWorkspaceSettings, workspaceSettingsToConversationSettings } from './workspace-settings-service'
 
 // ============================================
 // Claude Code Message Types (Raw Format)
@@ -134,6 +135,28 @@ export interface ConversationMessage {
   outputTokens?: number
 }
 
+// Conversation Settings Types
+export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+
+export interface ConversationSettings {
+  permissionMode: PermissionMode
+  allowedTools: string[]
+  model: string
+}
+
+// Default settings for new conversations
+export const DEFAULT_CONVERSATION_SETTINGS: ConversationSettings = {
+  permissionMode: 'default',
+  allowedTools: [], // Empty = Claude Code's default behavior (asks for permission)
+  model: 'claude-sonnet-4-20250514'
+}
+
+// Tools that require permissions - user can enable/disable these
+export const PERMISSION_TOOLS = ['Bash', 'Edit', 'Write', 'WebFetch', 'WebSearch', 'NotebookEdit']
+
+// Tools always available (no permissions needed)
+export const ALWAYS_AVAILABLE_TOOLS = ['Read', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion']
+
 export interface Conversation {
   id: string
   sessionId: string | null
@@ -143,6 +166,7 @@ export interface Conversation {
   createdAt: string
   updatedAt: string
   messageCount: number
+  settings?: ConversationSettings
 }
 
 interface ConversationsIndex {
@@ -240,9 +264,23 @@ export function listConversations(workspaceId: string, agentId: string): Convers
 
 /**
  * Create a new conversation
+ * @param workspaceId - The workspace ID
+ * @param agentId - The agent ID
+ * @param workspacePath - Optional workspace path to load workspace-level default settings
  */
-export function createConversation(workspaceId: string, agentId: string): Conversation {
+export function createConversation(workspaceId: string, agentId: string, workspacePath?: string): Conversation {
   ensureSessionsDir(workspaceId, agentId)
+
+  // Get default settings - use workspace defaults if path provided, otherwise use global defaults
+  let defaultSettings = { ...DEFAULT_CONVERSATION_SETTINGS }
+  if (workspacePath) {
+    try {
+      const workspaceSettings = getWorkspaceSettings(workspacePath)
+      defaultSettings = workspaceSettingsToConversationSettings(workspaceSettings)
+    } catch {
+      // Fall back to global defaults on error
+    }
+  }
 
   const now = new Date().toISOString()
   const conversation: Conversation = {
@@ -253,7 +291,8 @@ export function createConversation(workspaceId: string, agentId: string): Conver
     title: 'New Conversation',
     createdAt: now,
     updatedAt: now,
-    messageCount: 0
+    messageCount: 0,
+    settings: defaultSettings
   }
 
   // Add to index
@@ -312,7 +351,7 @@ export function loadConversation(conversationId: string): { conversation: Conver
  */
 export function updateConversation(
   conversationId: string,
-  updates: Partial<Pick<Conversation, 'title' | 'sessionId' | 'messageCount'>>
+  updates: Partial<Pick<Conversation, 'title' | 'sessionId' | 'messageCount' | 'settings'>>
 ): Conversation | null {
   const location = getConversationPath(conversationId)
   if (!location) {
@@ -332,6 +371,43 @@ export function updateConversation(
   if (updates.title !== undefined) conversation.title = updates.title
   if (updates.sessionId !== undefined) conversation.sessionId = updates.sessionId
   if (updates.messageCount !== undefined) conversation.messageCount = updates.messageCount
+  if (updates.settings !== undefined) conversation.settings = updates.settings
+  conversation.updatedAt = new Date().toISOString()
+
+  index.conversations[conversationIndex] = conversation
+  writeConversationsIndex(workspaceId, agentId, index)
+
+  return conversation
+}
+
+/**
+ * Update conversation settings (permission mode, allowed tools, model)
+ */
+export function updateConversationSettings(
+  conversationId: string,
+  settings: Partial<ConversationSettings>
+): Conversation | null {
+  const location = getConversationPath(conversationId)
+  if (!location) {
+    return null
+  }
+
+  const { workspaceId, agentId } = location
+  const index = readConversationsIndex(workspaceId, agentId)
+  const conversationIndex = index.conversations.findIndex(c => c.id === conversationId)
+
+  if (conversationIndex === -1) {
+    return null
+  }
+
+  // Update settings, merging with existing
+  const conversation = index.conversations[conversationIndex]
+  const currentSettings = conversation.settings || { ...DEFAULT_CONVERSATION_SETTINGS }
+
+  conversation.settings = {
+    ...currentSettings,
+    ...settings
+  }
   conversation.updatedAt = new Date().toISOString()
 
   index.conversations[conversationIndex] = conversation

@@ -3,7 +3,8 @@ import type {
   Conversation,
   ConversationMessage,
   ChatSidebarTab,
-  AgentStatus
+  AgentStatus,
+  ConversationSettings
 } from '../types'
 
 interface ChatStore {
@@ -29,7 +30,7 @@ interface ChatStore {
   // Actions
   loadConversations: (workspaceId: string, agentId: string) => Promise<void>
   selectConversation: (conversationId: string | null) => Promise<void>
-  createConversation: (workspaceId: string, agentId: string) => Promise<string | null>
+  createConversation: (workspaceId: string, agentId: string, workspacePath?: string) => Promise<string | null>
   deleteConversation: (conversationId: string) => Promise<void>
   sendMessage: (content: string, workspaceId: string, agentId: string, repoPath: string, agentFilePath?: string) => Promise<void>
   appendStreamDelta: (delta: string) => void
@@ -49,6 +50,9 @@ interface ChatStore {
   getAgentUnreadCount: (agentId: string) => number
   // Agent status helper
   getAgentStatus: (agentId: string) => AgentStatus
+  // Conversation settings
+  updateConversationSettings: (conversationId: string, settings: Partial<ConversationSettings>) => Promise<void>
+  getActiveConversationSettings: () => ConversationSettings | undefined
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -127,9 +131,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   // Create a new conversation
-  createConversation: async (workspaceId: string, agentId: string) => {
+  createConversation: async (workspaceId: string, agentId: string, workspacePath?: string) => {
     try {
-      const result = await window.api.conversation.create(workspaceId, agentId)
+      const result = await window.api.conversation.create(workspaceId, agentId, workspacePath)
       if (result.success && result.data) {
         const { conversations } = get()
         set({
@@ -175,7 +179,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     // Create conversation if none active
     if (!conversationId) {
-      conversationId = await get().createConversation(workspaceId, agentId)
+      // Pass repoPath so workspace defaults can be applied
+      conversationId = await get().createConversation(workspaceId, agentId, repoPath)
       if (!conversationId) {
         set({ error: 'Failed to create conversation' })
         return
@@ -432,5 +437,34 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Get status for a specific agent
   getAgentStatus: (agentId: string) => {
     return get().agentStatuses.get(agentId) || 'ready'
+  },
+
+  // Update conversation settings
+  updateConversationSettings: async (conversationId: string, settings: Partial<ConversationSettings>) => {
+    try {
+      const result = await window.api.conversation.updateSettings(conversationId, settings)
+      if (result.success && result.data) {
+        const updatedConversation = result.data
+        // Update the conversation in local state
+        const { conversations } = get()
+        const updatedConversations = conversations.map(conv => {
+          if (conv.id === conversationId) {
+            return updatedConversation
+          }
+          return conv
+        })
+        set({ conversations: updatedConversations })
+      }
+    } catch (error) {
+      set({ error: String(error) })
+    }
+  },
+
+  // Get settings for the active conversation
+  getActiveConversationSettings: () => {
+    const { activeConversationId, conversations } = get()
+    if (!activeConversationId) return undefined
+    const conversation = conversations.find(c => c.id === activeConversationId)
+    return conversation?.settings
   }
 }))

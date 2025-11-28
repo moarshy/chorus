@@ -179,6 +179,7 @@ interface Conversation {
   createdAt: string
   updatedAt: string
   messageCount: number
+  settings?: ConversationSettings
 }
 
 // ============================================
@@ -244,6 +245,30 @@ interface CloneResult {
 }
 
 // ============================================
+// Conversation Settings Types
+// ============================================
+
+type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+
+interface ConversationSettings {
+  permissionMode: PermissionMode
+  allowedTools: string[]
+  model: string
+}
+
+// Tools that require permissions - user can enable/disable these
+// const PERMISSION_TOOLS = ['Bash', 'Edit', 'Write', 'WebFetch', 'WebSearch', 'NotebookEdit']
+// Tools always available (no permissions needed)
+// const ALWAYS_AVAILABLE = ['Read', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion']
+
+// Workspace-level default settings
+interface WorkspaceSettings {
+  defaultPermissionMode: PermissionMode
+  defaultAllowedTools: string[]
+  defaultModel: string
+}
+
+// ============================================
 // API Interface
 // ============================================
 
@@ -291,9 +316,10 @@ interface GitAPI {
 
 interface ConversationAPI {
   list: (workspaceId: string, agentId: string) => Promise<ApiResult<Conversation[]>>
-  create: (workspaceId: string, agentId: string) => Promise<ApiResult<Conversation>>
+  create: (workspaceId: string, agentId: string, workspacePath?: string) => Promise<ApiResult<Conversation>>
   load: (conversationId: string) => Promise<ApiResult<{ conversation: Conversation | null; messages: ConversationMessage[] }>>
   delete: (conversationId: string) => Promise<ApiResult>
+  updateSettings: (conversationId: string, settings: Partial<ConversationSettings>) => Promise<ApiResult<Conversation>>
 }
 
 interface AgentAPI {
@@ -310,6 +336,12 @@ interface SessionAPI {
   clear: (agentId: string) => Promise<ApiResult>
 }
 
+interface WorkspaceSettingsAPI {
+  get: (workspacePath: string) => Promise<ApiResult<WorkspaceSettings>>
+  set: (workspacePath: string, settings: Partial<WorkspaceSettings>) => Promise<ApiResult<WorkspaceSettings>>
+  has: (workspacePath: string) => Promise<ApiResult<boolean>>
+}
+
 interface CustomAPI {
   settings: SettingsAPI
   workspace: WorkspaceAPI
@@ -320,6 +352,7 @@ interface CustomAPI {
   conversation: ConversationAPI
   agent: AgentAPI
   session: SessionAPI
+  workspaceSettings: WorkspaceSettingsAPI
 }
 
 declare global {
@@ -358,5 +391,9 @@ export type {
   ClaudeAssistantMessage,
   ClaudeUserMessage,
   ClaudeResultMessage,
-  ClaudeCodeMessage
+  ClaudeCodeMessage,
+  // Conversation settings types
+  PermissionMode,
+  ConversationSettings,
+  WorkspaceSettings
 }

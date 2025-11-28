@@ -84,12 +84,14 @@ const api = {
   conversation: {
     list: (workspaceId: string, agentId: string) =>
       ipcRenderer.invoke('conversation:list', workspaceId, agentId),
-    create: (workspaceId: string, agentId: string) =>
-      ipcRenderer.invoke('conversation:create', workspaceId, agentId),
+    create: (workspaceId: string, agentId: string, workspacePath?: string) =>
+      ipcRenderer.invoke('conversation:create', workspaceId, agentId, workspacePath),
     load: (conversationId: string) =>
       ipcRenderer.invoke('conversation:load', conversationId),
     delete: (conversationId: string) =>
-      ipcRenderer.invoke('conversation:delete', conversationId)
+      ipcRenderer.invoke('conversation:delete', conversationId),
+    updateSettings: (conversationId: string, settings: { permissionMode?: string; allowedTools?: string[]; model?: string }) =>
+      ipcRenderer.invoke('conversation:update-settings', conversationId, settings)
   },
 
   // Agent operations (for Claude CLI communication)
@@ -131,6 +133,16 @@ const api = {
       ipcRenderer.invoke('session:get', agentId),
     clear: (agentId: string) =>
       ipcRenderer.invoke('session:clear', agentId)
+  },
+
+  // Workspace settings operations
+  workspaceSettings: {
+    get: (workspacePath: string) =>
+      ipcRenderer.invoke('workspace-settings:get', workspacePath),
+    set: (workspacePath: string, settings: { defaultPermissionMode?: string; defaultAllowedTools?: string[]; defaultModel?: string }) =>
+      ipcRenderer.invoke('workspace-settings:set', workspacePath, settings),
+    has: (workspacePath: string) =>
+      ipcRenderer.invoke('workspace-settings:has', workspacePath)
   }
 }
 

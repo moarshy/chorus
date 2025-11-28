@@ -10,7 +10,9 @@ import {
   ClaudeCodeMessage,
   ClaudeAssistantMessage,
   ClaudeUserMessage,
-  ClaudeResultMessage
+  ClaudeResultMessage,
+  ConversationSettings,
+  DEFAULT_CONVERSATION_SETTINGS
 } from './conversation-service'
 
 // Store active processes per agent
@@ -56,7 +58,8 @@ export async function sendMessage(
   message: string,
   sessionId: string | null,
   agentFilePath: string | null,
-  mainWindow: BrowserWindow
+  mainWindow: BrowserWindow,
+  settings?: ConversationSettings
 ): Promise<void> {
   // Kill any existing process for this agent
   stopAgent(agentId)
@@ -67,8 +70,26 @@ export async function sendMessage(
     status: 'busy'
   })
 
+  // Use provided settings or defaults
+  const effectiveSettings = settings || DEFAULT_CONVERSATION_SETTINGS
+
   // Build claude command args
   const args = ['-p', '--verbose', '--output-format', 'stream-json']
+
+  // Add permission mode (if not default)
+  if (effectiveSettings.permissionMode && effectiveSettings.permissionMode !== 'default') {
+    args.push('--permission-mode', effectiveSettings.permissionMode)
+  }
+
+  // Add allowed tools (if any specified)
+  if (effectiveSettings.allowedTools && effectiveSettings.allowedTools.length > 0) {
+    args.push('--allowedTools', effectiveSettings.allowedTools.join(','))
+  }
+
+  // Add model (if specified)
+  if (effectiveSettings.model) {
+    args.push('--model', effectiveSettings.model)
+  }
 
   // Add agent system prompt file if provided and exists
   if (agentFilePath && existsSync(agentFilePath)) {

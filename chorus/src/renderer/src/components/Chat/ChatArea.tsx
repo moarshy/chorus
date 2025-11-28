@@ -1,6 +1,7 @@
 import type { Agent, Workspace } from '../../types'
 import { useChatStore } from '../../stores/chat-store'
 import { ChatHeader } from './ChatHeader'
+import { ConversationToolbar } from './ConversationToolbar'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 
@@ -36,11 +37,14 @@ const WarningIcon = () => (
 )
 
 export function ChatArea({ agent, workspace }: ChatAreaProps) {
-  const { error, setError, claudePath, isClaudeChecked } = useChatStore()
+  const { error, setError, claudePath, isClaudeChecked, activeConversationId } = useChatStore()
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <ChatHeader agent={agent} workspace={workspace} />
+      {activeConversationId && (
+        <ConversationToolbar conversationId={activeConversationId} />
+      )}
 
       {/* Claude CLI Not Installed Warning */}
       {isClaudeChecked && !claudePath && (

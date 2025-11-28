@@ -10,6 +10,7 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 |--------|--------|---------|
 | **0-chorus-setup** | ✅ Complete | Foundation: Electron app, two-pane layout, workspace management, file browser, git integration |
 | **1-claude-code-integration** | ✅ Complete | Claude Code agent spawning, streaming output, conversation storage |
+| **2-claude-code-settings** | ✅ Complete | Per-conversation and workspace-level settings for permission mode, tool allowlist, and model selection |
 | **Git branch switching** | ✅ Complete | Branch selector in sidebar, 5-column commits grid in workspace overview, checkout support |
 | **Markdown rendering** | ✅ Complete | Chat messages render markdown, code blocks with syntax highlighting, mermaid diagrams |
 | **Tool calls UI** | ✅ Complete | Consecutive tool calls grouped into collapsible sections with input/output display |
@@ -20,6 +21,7 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 - `specifications/0-chorus-setup/feature.md` - User stories, acceptance criteria
 - `specifications/0-chorus-setup/implementation-plan.md` - Phased build approach, patterns to follow
 - `specifications/1-claude-code-integration/implementation-plan.md` - Claude Code integration plan
+- `specifications/2-claude-code-settings/feature.md` - Permission modes, tool selection, model configuration
 
 ## Architecture
 
@@ -68,6 +70,10 @@ chorus/
 
 **Multi-Agent Conversations**: Multiple agents can run simultaneously. State is tracked per-conversation (`streamingConversationId`) and per-agent (`agentStatuses` Map). Unread counts are tracked per-conversation and aggregated per-agent. Components: `ToolCallsGroup.tsx`, `AgentItem.tsx`, `ConversationItem.tsx`.
 
+**Conversation Settings**: Each conversation can have custom settings for permission mode, allowed tools, and model selection. Settings are stored in the conversation's `settings` field and passed to Claude CLI via `--permission-mode`, `--allowedTools`, and `--model` flags. The `ConversationToolbar` component in the chat header provides dropdowns for changing these settings. See `specifications/2-claude-code-settings/feature.md` for details.
+
+**Workspace Default Settings**: Each workspace can have default settings stored in `.chorus/workspace-settings.json` that apply to new conversations. The settings hierarchy is: Global defaults → Workspace defaults → Per-conversation overrides. The `WorkspaceSettings` component in the Workspace Overview page allows users to configure defaults for permission mode, allowed tools, and model selection.
+
 ## Development
 
 ```bash
@@ -92,4 +98,7 @@ bun run typecheck  # Type check all code
 - `chorus/src/main/services/workspace-service.ts` - Agent discovery with stable IDs
 - `chorus/src/preload/index.ts` - API surface exposed to renderer
 - `chorus/src/preload/index.d.ts` - Type definitions including Claude Code message types
+- `chorus/src/renderer/src/components/Chat/ConversationToolbar.tsx` - Settings toolbar with model/permission/tools dropdowns
+- `chorus/src/main/services/workspace-settings-service.ts` - Workspace default settings read/write
+- `chorus/src/renderer/src/components/MainPane/WorkspaceSettings.tsx` - Workspace settings UI in overview
 - `docs/3-tools/claude-code/message-format.md` - Claude Code stream-json format documentation

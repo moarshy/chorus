@@ -1,5 +1,6 @@
 import { ChangesPanel } from './ChangesPanel'
 import { BranchCommitsGrid } from './BranchCommitsGrid'
+import { WorkspaceSettings } from './WorkspaceSettings'
 import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import type { Workspace } from '../../types'
@@ -115,6 +116,9 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
           />
         </div>
       )}
+
+      {/* Workspace default settings */}
+      <WorkspaceSettings workspacePath={workspace.path} />
 
       {/* Agents section */}
       <div className="mb-8">
