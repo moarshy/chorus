@@ -211,6 +211,28 @@ interface AgentSessionUpdateEvent {
   sessionCreatedAt: string
 }
 
+// Permission request event from SDK canUseTool callback
+interface PermissionRequestEvent {
+  requestId: string
+  conversationId: string
+  toolName: string
+  toolInput: Record<string, unknown>
+}
+
+// Permission response for SDK canUseTool callback
+interface PermissionResponse {
+  approved: boolean
+  reason?: string
+  stopCompletely?: boolean
+}
+
+// File change event from SDK PostToolUse hook
+interface FileChangedEvent {
+  conversationId: string
+  filePath: string
+  toolName: string
+}
+
 interface DirectoryEntry {
   name: string
   path: string
@@ -337,12 +359,18 @@ interface ConversationAPI {
 
 interface AgentAPI {
   send: (conversationId: string, message: string, repoPath: string, sessionId?: string, agentFilePath?: string) => Promise<ApiResult>
-  stop: (agentId: string) => Promise<ApiResult>
+  stop: (agentId: string, conversationId?: string) => Promise<ApiResult>
   checkAvailable: () => Promise<ApiResult<string | null>>
+  // Permission response (for SDK canUseTool callback)
+  respondPermission: (requestId: string, response: PermissionResponse) => Promise<ApiResult>
+  // Event listeners
   onStreamDelta: (callback: (event: AgentStreamDelta) => void) => () => void
   onMessage: (callback: (event: AgentMessageEvent) => void) => () => void
   onStatus: (callback: (event: AgentStatusEvent) => void) => () => void
   onSessionUpdate: (callback: (event: AgentSessionUpdateEvent) => void) => () => void
+  // SDK-only events
+  onPermissionRequest: (callback: (event: PermissionRequestEvent) => void) => () => void
+  onFileChanged: (callback: (event: FileChangedEvent) => void) => () => void
 }
 
 interface SessionAPI {
@@ -395,6 +423,10 @@ export type {
   AgentMessageEvent,
   AgentStatusEvent,
   AgentSessionUpdateEvent,
+  // SDK permission types
+  PermissionRequestEvent,
+  PermissionResponse,
+  FileChangedEvent,
   // Claude Code message types
   TextBlock,
   ToolUseBlock,

@@ -33,7 +33,11 @@ export type {
   // Conversation settings types
   PermissionMode,
   ConversationSettings,
-  WorkspaceSettings
+  WorkspaceSettings,
+  // SDK permission types
+  PermissionRequestEvent,
+  PermissionResponse,
+  FileChangedEvent
 } from '../../../preload/index.d'
 
 // UI-specific types

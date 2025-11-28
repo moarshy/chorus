@@ -24,6 +24,21 @@ interface AgentSessionUpdateEvent {
   sessionCreatedAt: string
 }
 
+// Permission request event from SDK canUseTool callback
+interface PermissionRequestEvent {
+  requestId: string
+  conversationId: string
+  toolName: string
+  toolInput: Record<string, unknown>
+}
+
+// File change event from SDK PostToolUse hook
+interface FileChangedEvent {
+  conversationId: string
+  filePath: string
+  toolName: string
+}
+
 // Custom APIs for renderer - these are the ONLY APIs renderer can access
 const api = {
   // Settings operations
@@ -101,7 +116,7 @@ const api = {
       ipcRenderer.invoke('conversation:update-settings', conversationId, settings)
   },
 
-  // Agent operations (for Claude CLI communication)
+  // Agent operations (for Claude CLI/SDK communication)
   agent: {
     send: (
       conversationId: string,
@@ -111,10 +126,17 @@ const api = {
       agentFilePath?: string
     ) =>
       ipcRenderer.invoke('agent:send', conversationId, message, repoPath, sessionId, agentFilePath),
-    stop: (agentId: string) =>
-      ipcRenderer.invoke('agent:stop', agentId),
+    stop: (agentId: string, conversationId?: string) =>
+      ipcRenderer.invoke('agent:stop', agentId, conversationId),
     checkAvailable: () =>
       ipcRenderer.invoke('agent:check-available'),
+
+    // Permission response (for SDK canUseTool callback)
+    respondPermission: (
+      requestId: string,
+      response: { approved: boolean; reason?: string; stopCompletely?: boolean }
+    ) =>
+      ipcRenderer.invoke('agent:respond-permission', requestId, response),
 
     // Event listeners with cleanup
     onStreamDelta: (callback: (event: AgentStreamDelta) => void) => {
@@ -136,6 +158,18 @@ const api = {
       const handler = (_event: unknown, data: AgentSessionUpdateEvent) => callback(data)
       ipcRenderer.on('agent:session-update', handler)
       return () => ipcRenderer.removeListener('agent:session-update', handler)
+    },
+    // Permission request event (SDK only)
+    onPermissionRequest: (callback: (event: PermissionRequestEvent) => void) => {
+      const handler = (_event: unknown, data: PermissionRequestEvent) => callback(data)
+      ipcRenderer.on('permission:request', handler)
+      return () => ipcRenderer.removeListener('permission:request', handler)
+    },
+    // File change event (SDK only)
+    onFileChanged: (callback: (event: FileChangedEvent) => void) => {
+      const handler = (_event: unknown, data: FileChangedEvent) => callback(data)
+      ipcRenderer.on('agent:file-changed', handler)
+      return () => ipcRenderer.removeListener('agent:file-changed', handler)
     }
   },
 

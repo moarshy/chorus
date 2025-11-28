@@ -4,7 +4,8 @@ import type {
   ConversationMessage,
   ChatSidebarTab,
   AgentStatus,
-  ConversationSettings
+  ConversationSettings,
+  PermissionRequestEvent
 } from '../types'
 
 interface ChatStore {
@@ -26,6 +27,8 @@ interface ChatStore {
   // Unread tracking
   unreadCounts: Map<string, number>       // conversationId → count
   unreadByAgent: Map<string, number>      // agentId → total count
+  // Permission request (SDK mode)
+  pendingPermissionRequest: PermissionRequestEvent | null
 
   // Actions
   loadConversations: (workspaceId: string, agentId: string) => Promise<void>
@@ -53,6 +56,8 @@ interface ChatStore {
   // Conversation settings
   updateConversationSettings: (conversationId: string, settings: Partial<ConversationSettings>) => Promise<void>
   getActiveConversationSettings: () => ConversationSettings | undefined
+  // Permission handling (SDK mode)
+  respondToPermission: (approved: boolean, reason?: string) => Promise<void>
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -74,6 +79,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Unread tracking
   unreadCounts: new Map<string, number>(),
   unreadByAgent: new Map<string, number>(),
+  // Permission request (SDK mode)
+  pendingPermissionRequest: null,
 
   // Load conversations for a workspace/agent
   loadConversations: async (workspaceId: string, agentId: string) => {
@@ -357,6 +364,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({ conversations: updatedConversations })
     })
 
+    // Permission request listener (SDK mode)
+    const unsubscribePermission = window.api.agent.onPermissionRequest((event) => {
+      set({ pendingPermissionRequest: event })
+    })
+
     // Load chatSidebarCollapsed from settings
     window.api.settings.get().then(result => {
       if (result.success && result.data) {
@@ -373,6 +385,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       unsubscribeMessage()
       unsubscribeStatus()
       unsubscribeSessionUpdate()
+      unsubscribePermission()
     }
   },
 
@@ -495,5 +508,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!activeConversationId) return undefined
     const conversation = conversations.find(c => c.id === activeConversationId)
     return conversation?.settings
+  },
+
+  // Respond to a permission request (SDK mode)
+  respondToPermission: async (approved: boolean, reason?: string) => {
+    const { pendingPermissionRequest } = get()
+    if (!pendingPermissionRequest) return
+
+    try {
+      await window.api.agent.respondPermission(pendingPermissionRequest.requestId, {
+        approved,
+        reason
+      })
+    } catch (error) {
+      console.error('Failed to respond to permission:', error)
+    } finally {
+      // Clear the pending request
+      set({ pendingPermissionRequest: null })
+    }
   }
 }))

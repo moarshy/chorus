@@ -40,7 +40,8 @@ import {
   stopAgent,
   isClaudeAvailable,
   getSessionId,
-  clearSession
+  clearSession,
+  resolvePermission
 } from './services/agent-service'
 
 // Store reference to main window for IPC events
@@ -441,14 +442,34 @@ app.whenReady().then(() => {
     }
   )
 
-  ipcMain.handle('agent:stop', async (_event, agentId: string) => {
+  ipcMain.handle('agent:stop', async (_event, agentId: string, conversationId?: string) => {
     try {
-      stopAgent(agentId)
+      stopAgent(agentId, conversationId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
     }
   })
+
+  // Permission response handler for SDK canUseTool callback
+  ipcMain.handle(
+    'agent:respond-permission',
+    async (
+      _event,
+      requestId: string,
+      response: { approved: boolean; reason?: string; stopCompletely?: boolean }
+    ) => {
+      try {
+        const resolved = resolvePermission(requestId, response)
+        if (!resolved) {
+          return { success: false, error: 'No pending permission request found' }
+        }
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
 
   ipcMain.handle('agent:check-available', async () => {
     try {
