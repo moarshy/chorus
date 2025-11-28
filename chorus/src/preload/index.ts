@@ -84,8 +84,8 @@ const api = {
   conversation: {
     list: (workspaceId: string, agentId: string) =>
       ipcRenderer.invoke('conversation:list', workspaceId, agentId),
-    create: (workspaceId: string, agentId: string, workspacePath?: string) =>
-      ipcRenderer.invoke('conversation:create', workspaceId, agentId, workspacePath),
+    create: (workspaceId: string, agentId: string) =>
+      ipcRenderer.invoke('conversation:create', workspaceId, agentId),
     load: (conversationId: string) =>
       ipcRenderer.invoke('conversation:load', conversationId),
     delete: (conversationId: string) =>
@@ -135,14 +135,14 @@ const api = {
       ipcRenderer.invoke('session:clear', agentId)
   },
 
-  // Workspace settings operations
+  // Workspace settings operations (uses workspaceId, stored in central config.json)
   workspaceSettings: {
-    get: (workspacePath: string) =>
-      ipcRenderer.invoke('workspace-settings:get', workspacePath),
-    set: (workspacePath: string, settings: { defaultPermissionMode?: string; defaultAllowedTools?: string[]; defaultModel?: string }) =>
-      ipcRenderer.invoke('workspace-settings:set', workspacePath, settings),
-    has: (workspacePath: string) =>
-      ipcRenderer.invoke('workspace-settings:has', workspacePath)
+    get: (workspaceId: string) =>
+      ipcRenderer.invoke('workspace-settings:get', workspaceId),
+    set: (workspaceId: string, settings: { defaultPermissionMode?: string; defaultAllowedTools?: string[]; defaultModel?: string }) =>
+      ipcRenderer.invoke('workspace-settings:set', workspaceId, settings),
+    has: (workspaceId: string) =>
+      ipcRenderer.invoke('workspace-settings:has', workspaceId)
   }
 }
 

@@ -316,7 +316,7 @@ interface GitAPI {
 
 interface ConversationAPI {
   list: (workspaceId: string, agentId: string) => Promise<ApiResult<Conversation[]>>
-  create: (workspaceId: string, agentId: string, workspacePath?: string) => Promise<ApiResult<Conversation>>
+  create: (workspaceId: string, agentId: string) => Promise<ApiResult<Conversation>>
   load: (conversationId: string) => Promise<ApiResult<{ conversation: Conversation | null; messages: ConversationMessage[] }>>
   delete: (conversationId: string) => Promise<ApiResult>
   updateSettings: (conversationId: string, settings: Partial<ConversationSettings>) => Promise<ApiResult<Conversation>>
@@ -337,9 +337,9 @@ interface SessionAPI {
 }
 
 interface WorkspaceSettingsAPI {
-  get: (workspacePath: string) => Promise<ApiResult<WorkspaceSettings>>
-  set: (workspacePath: string, settings: Partial<WorkspaceSettings>) => Promise<ApiResult<WorkspaceSettings>>
-  has: (workspacePath: string) => Promise<ApiResult<boolean>>
+  get: (workspaceId: string) => Promise<ApiResult<WorkspaceSettings>>
+  set: (workspaceId: string, settings: Partial<WorkspaceSettings>) => Promise<ApiResult<WorkspaceSettings>>
+  has: (workspaceId: string) => Promise<ApiResult<boolean>>
 }
 
 interface CustomAPI {

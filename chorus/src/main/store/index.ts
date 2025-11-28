@@ -12,6 +12,12 @@ export interface Agent {
   workspaceId: string
 }
 
+export interface WorkspaceSettings {
+  defaultPermissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+  defaultAllowedTools: string[]
+  defaultModel: string
+}
+
 export interface Workspace {
   id: string
   name: string
@@ -21,6 +27,7 @@ export interface Workspace {
   isDirty: boolean
   hasSystemPrompt: boolean
   agents: Agent[]
+  settings?: WorkspaceSettings
 }
 
 export interface ChorusSettings {
@@ -177,4 +184,50 @@ export function toggleWorkspaceExpanded(id: string): void {
     workspace.isExpanded = !workspace.isExpanded
     store.set('workspaces', workspaces)
   }
+}
+
+// ============================================
+// WORKSPACE SETTINGS OPERATIONS
+// ============================================
+
+const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
+  defaultPermissionMode: 'default',
+  defaultAllowedTools: [],
+  defaultModel: 'default'
+}
+
+export function getWorkspaceSettings(workspaceId: string): WorkspaceSettings {
+  const workspaces = getWorkspaces()
+  const workspace = workspaces.find((ws) => ws.id === workspaceId)
+  if (!workspace?.settings) {
+    return { ...DEFAULT_WORKSPACE_SETTINGS }
+  }
+  return {
+    ...DEFAULT_WORKSPACE_SETTINGS,
+    ...workspace.settings
+  }
+}
+
+export function setWorkspaceSettings(workspaceId: string, settings: Partial<WorkspaceSettings>): WorkspaceSettings {
+  const workspaces = getWorkspaces()
+  const index = workspaces.findIndex((ws) => ws.id === workspaceId)
+  if (index === -1) {
+    return { ...DEFAULT_WORKSPACE_SETTINGS }
+  }
+
+  const current = workspaces[index].settings || { ...DEFAULT_WORKSPACE_SETTINGS }
+  const updated: WorkspaceSettings = {
+    ...current,
+    ...settings
+  }
+
+  workspaces[index].settings = updated
+  store.set('workspaces', workspaces)
+  return updated
+}
+
+export function hasWorkspaceSettings(workspaceId: string): boolean {
+  const workspaces = getWorkspaces()
+  const workspace = workspaces.find((ws) => ws.id === workspaceId)
+  return !!workspace?.settings
 }

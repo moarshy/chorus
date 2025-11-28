@@ -30,7 +30,7 @@ interface ChatStore {
   // Actions
   loadConversations: (workspaceId: string, agentId: string) => Promise<void>
   selectConversation: (conversationId: string | null) => Promise<void>
-  createConversation: (workspaceId: string, agentId: string, workspacePath?: string) => Promise<string | null>
+  createConversation: (workspaceId: string, agentId: string) => Promise<string | null>
   deleteConversation: (conversationId: string) => Promise<void>
   sendMessage: (content: string, workspaceId: string, agentId: string, repoPath: string, agentFilePath?: string) => Promise<void>
   appendStreamDelta: (delta: string) => void
@@ -131,9 +131,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   // Create a new conversation
-  createConversation: async (workspaceId: string, agentId: string, workspacePath?: string) => {
+  createConversation: async (workspaceId: string, agentId: string) => {
     try {
-      const result = await window.api.conversation.create(workspaceId, agentId, workspacePath)
+      const result = await window.api.conversation.create(workspaceId, agentId)
       if (result.success && result.data) {
         const { conversations } = get()
         set({
@@ -179,8 +179,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     // Create conversation if none active
     if (!conversationId) {
-      // Pass repoPath so workspace defaults can be applied
-      conversationId = await get().createConversation(workspaceId, agentId, repoPath)
+      // Settings are fetched by workspaceId on the backend
+      conversationId = await get().createConversation(workspaceId, agentId)
       if (!conversationId) {
         set({ error: 'Failed to create conversation' })
         return

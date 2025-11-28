@@ -94,10 +94,10 @@ function Dropdown({ label, value, children }: DropdownProps) {
 }
 
 interface WorkspaceSettingsProps {
-  workspacePath: string
+  workspaceId: string
 }
 
-export function WorkspaceSettings({ workspacePath }: WorkspaceSettingsProps) {
+export function WorkspaceSettings({ workspaceId }: WorkspaceSettingsProps) {
   const [settings, setSettings] = useState<WorkspaceSettingsType>(DEFAULT_SETTINGS)
   const [isLoading, setIsLoading] = useState(true)
   const [hasSettings, setHasSettings] = useState(false)
@@ -107,10 +107,10 @@ export function WorkspaceSettings({ workspacePath }: WorkspaceSettingsProps) {
     const loadSettings = async () => {
       setIsLoading(true)
       try {
-        const hasResult = await window.api.workspaceSettings.has(workspacePath)
+        const hasResult = await window.api.workspaceSettings.has(workspaceId)
         setHasSettings(hasResult.success && hasResult.data === true)
 
-        const result = await window.api.workspaceSettings.get(workspacePath)
+        const result = await window.api.workspaceSettings.get(workspaceId)
         if (result.success && result.data) {
           setSettings(result.data)
         }
@@ -120,11 +120,11 @@ export function WorkspaceSettings({ workspacePath }: WorkspaceSettingsProps) {
       setIsLoading(false)
     }
     loadSettings()
-  }, [workspacePath])
+  }, [workspaceId])
 
   const updateSettings = async (updates: Partial<WorkspaceSettingsType>) => {
     try {
-      const result = await window.api.workspaceSettings.set(workspacePath, updates)
+      const result = await window.api.workspaceSettings.set(workspaceId, updates)
       if (result.success && result.data) {
         setSettings(result.data)
         setHasSettings(true)
@@ -177,7 +177,7 @@ export function WorkspaceSettings({ workspacePath }: WorkspaceSettingsProps) {
         <p className="text-sm text-muted mb-4">
           Default settings for new conversations in this workspace.
           {!hasSettings && (
-            <span className="text-secondary"> Settings will be saved to <code className="text-accent">.chorus/workspace-settings.json</code>.</span>
+            <span className="text-secondary"> Settings will be saved to <code className="text-accent">.chorus/config.json</code>.</span>
           )}
         </p>
 

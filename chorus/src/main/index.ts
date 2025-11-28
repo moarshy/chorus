@@ -12,7 +12,11 @@ import {
   addWorkspace,
   removeWorkspace,
   updateWorkspace,
-  getChorusDir
+  getChorusDir,
+  getWorkspaceSettings,
+  setWorkspaceSettings,
+  hasWorkspaceSettings,
+  WorkspaceSettings
 } from './store'
 
 // Import services
@@ -38,12 +42,6 @@ import {
   getSessionId,
   clearSession
 } from './services/agent-service'
-import {
-  getWorkspaceSettings,
-  setWorkspaceSettings,
-  hasWorkspaceSettings,
-  WorkspaceSettings
-} from './services/workspace-settings-service'
 
 // Store reference to main window for IPC events
 let mainWindow: BrowserWindow | null = null
@@ -342,9 +340,10 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('conversation:create', async (_event, workspaceId: string, agentId: string, workspacePath?: string) => {
+  ipcMain.handle('conversation:create', async (_event, workspaceId: string, agentId: string) => {
     try {
-      const conversation = createConversation(workspaceId, agentId, workspacePath)
+      // Settings are now fetched from store by workspaceId inside createConversation
+      const conversation = createConversation(workspaceId, agentId)
       return { success: true, data: conversation }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -470,27 +469,27 @@ app.whenReady().then(() => {
   // WORKSPACE SETTINGS IPC HANDLERS
   // ============================================
 
-  ipcMain.handle('workspace-settings:get', async (_event, workspacePath: string) => {
+  ipcMain.handle('workspace-settings:get', async (_event, workspaceId: string) => {
     try {
-      const settings = getWorkspaceSettings(workspacePath)
+      const settings = getWorkspaceSettings(workspaceId)
       return { success: true, data: settings }
     } catch (error) {
       return { success: false, error: String(error) }
     }
   })
 
-  ipcMain.handle('workspace-settings:set', async (_event, workspacePath: string, settings: Partial<WorkspaceSettings>) => {
+  ipcMain.handle('workspace-settings:set', async (_event, workspaceId: string, settings: Partial<WorkspaceSettings>) => {
     try {
-      const updated = setWorkspaceSettings(workspacePath, settings)
+      const updated = setWorkspaceSettings(workspaceId, settings)
       return { success: true, data: updated }
     } catch (error) {
       return { success: false, error: String(error) }
     }
   })
 
-  ipcMain.handle('workspace-settings:has', async (_event, workspacePath: string) => {
+  ipcMain.handle('workspace-settings:has', async (_event, workspaceId: string) => {
     try {
-      const has = hasWorkspaceSettings(workspacePath)
+      const has = hasWorkspaceSettings(workspaceId)
       return { success: true, data: has }
     } catch (error) {
       return { success: false, error: String(error) }

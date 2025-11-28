@@ -118,7 +118,7 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
       )}
 
       {/* Workspace default settings */}
-      <WorkspaceSettings workspacePath={workspace.path} />
+      <WorkspaceSettings workspaceId={workspace.id} />
 
       {/* Agents section */}
       <div className="mb-8">

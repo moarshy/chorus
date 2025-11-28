@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, unlinkSync, rmdirSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
-import { getChorusDir } from '../store'
-import { getWorkspaceSettings, workspaceSettingsToConversationSettings } from './workspace-settings-service'
+import { getChorusDir, getWorkspaceSettings as getWorkspaceSettingsFromStore } from '../store'
 
 // ============================================
 // Claude Code Message Types (Raw Format)
@@ -266,20 +265,22 @@ export function listConversations(workspaceId: string, agentId: string): Convers
  * Create a new conversation
  * @param workspaceId - The workspace ID
  * @param agentId - The agent ID
- * @param workspacePath - Optional workspace path to load workspace-level default settings
  */
-export function createConversation(workspaceId: string, agentId: string, workspacePath?: string): Conversation {
+export function createConversation(workspaceId: string, agentId: string): Conversation {
   ensureSessionsDir(workspaceId, agentId)
 
-  // Get default settings - use workspace defaults if path provided, otherwise use global defaults
+  // Get default settings from workspace (stored in central config.json)
   let defaultSettings = { ...DEFAULT_CONVERSATION_SETTINGS }
-  if (workspacePath) {
-    try {
-      const workspaceSettings = getWorkspaceSettings(workspacePath)
-      defaultSettings = workspaceSettingsToConversationSettings(workspaceSettings)
-    } catch {
-      // Fall back to global defaults on error
+  try {
+    const workspaceSettings = getWorkspaceSettingsFromStore(workspaceId)
+    // Convert workspace settings to conversation settings
+    defaultSettings = {
+      permissionMode: workspaceSettings.defaultPermissionMode,
+      allowedTools: workspaceSettings.defaultAllowedTools,
+      model: workspaceSettings.defaultModel
     }
+  } catch {
+    // Fall back to global defaults on error
   }
 
   const now = new Date().toISOString()
