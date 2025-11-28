@@ -24,7 +24,9 @@ const SparklesIcon = () => (
 )
 
 export function MessageList() {
-  const { messages, isStreaming, streamingContent, isLoading } = useChatStore()
+  const { messages, isStreaming, streamingContent, isLoading, activeConversationId, streamingConversationId } = useChatStore()
+  // Only show streaming UI if THIS conversation is the one streaming
+  const isThisConversationStreaming = isStreaming && streamingConversationId === activeConversationId
   const scrollRef = useRef<HTMLDivElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -164,7 +166,7 @@ export function MessageList() {
       })}
 
       {/* Streaming content indicator */}
-      {isStreaming && streamingContent && (
+      {isThisConversationStreaming && streamingContent && (
         <div className="flex gap-3">
           <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center text-accent shrink-0">
             <SparklesIcon />
@@ -179,7 +181,7 @@ export function MessageList() {
       )}
 
       {/* Typing indicator when streaming but no content yet */}
-      {isStreaming && !streamingContent && (
+      {isThisConversationStreaming && !streamingContent && (
         <div className="flex gap-3 items-start">
           <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center text-accent shrink-0 animate-pulse">
             <SparklesIcon />

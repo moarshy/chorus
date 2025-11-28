@@ -1,4 +1,5 @@
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useChatStore } from '../../stores/chat-store'
 import type { Agent } from '../../types'
 
 interface AgentItemProps {
@@ -39,7 +40,10 @@ function getInitials(name: string): string {
 
 export function AgentItem({ agent }: AgentItemProps) {
   const { selectedAgentId, selectAgent } = useWorkspaceStore()
+  const { getAgentUnreadCount, getAgentStatus } = useChatStore()
   const isSelected = selectedAgentId === agent.id
+  const unreadCount = getAgentUnreadCount(agent.id)
+  const agentStatus = getAgentStatus(agent.id)
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -63,12 +67,35 @@ export function AgentItem({ agent }: AgentItemProps) {
         style={{ backgroundColor: avatarColor }}
       >
         {initials}
-        {/* Online status indicator */}
-        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-sidebar" />
+        {/* Status indicator - green=ready, yellow=busy, red=error */}
+        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-sidebar ${
+          agentStatus === 'busy' ? 'bg-yellow-500 animate-pulse' :
+          agentStatus === 'error' ? 'bg-red-500' :
+          'bg-green-500'
+        }`} />
       </div>
 
       {/* Name */}
-      <span className="truncate text-sm">{agent.name}</span>
+      <span className="truncate text-sm flex-1">{agent.name}</span>
+
+      {/* Status badge - Busy or Error */}
+      {agentStatus === 'busy' && (
+        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-yellow-500/20 text-yellow-400 rounded shrink-0">
+          Busy
+        </span>
+      )}
+      {agentStatus === 'error' && (
+        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-red-500/20 text-red-400 rounded shrink-0">
+          Error
+        </span>
+      )}
+
+      {/* Unread badge */}
+      {unreadCount > 0 && agentStatus === 'ready' && (
+        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent text-white rounded-full min-w-[18px] text-center shrink-0">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
     </div>
   )
 }

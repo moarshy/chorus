@@ -17,8 +17,13 @@ export function ChatView({ agent, workspace }: ChatViewProps) {
     clearChat,
     createConversation,
     isStreaming,
+    streamingConversationId,
+    activeConversationId,
     stopAgent
   } = useChatStore()
+
+  // Only respond to escape if THIS conversation is streaming
+  const isThisConversationStreaming = isStreaming && streamingConversationId === activeConversationId
 
   // Load conversations when agent changes
   useEffect(() => {
@@ -46,11 +51,11 @@ export function ChatView({ agent, workspace }: ChatViewProps) {
       createConversation(workspace.id, agent.id)
     }
 
-    // Escape: Stop streaming (global, not just in input)
-    if (e.key === 'Escape' && isStreaming) {
+    // Escape: Stop streaming (only if this conversation is streaming)
+    if (e.key === 'Escape' && isThisConversationStreaming) {
       stopAgent(agent.id)
     }
-  }, [workspace.id, agent.id, createConversation, isStreaming, stopAgent])
+  }, [workspace.id, agent.id, createConversation, isThisConversationStreaming, stopAgent])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)

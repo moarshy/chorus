@@ -18,9 +18,11 @@ const SendIcon = () => (
 export function MessageInput({ agent, workspace }: MessageInputProps) {
   const [message, setMessage] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const { isStreaming, isLoading, sendMessage } = useChatStore()
+  const { isStreaming, isLoading, sendMessage, activeConversationId, streamingConversationId } = useChatStore()
 
-  const isDisabled = isStreaming || isLoading
+  // Only disable if THIS conversation is streaming
+  const isThisConversationStreaming = isStreaming && streamingConversationId === activeConversationId
+  const isDisabled = isThisConversationStreaming || isLoading
 
   // Auto-resize textarea
   useEffect(() => {
@@ -58,8 +60,8 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
       handleSubmit()
     }
 
-    // Escape to stop streaming
-    if (e.key === 'Escape' && isStreaming) {
+    // Escape to stop streaming (only if this conversation is streaming)
+    if (e.key === 'Escape' && isThisConversationStreaming) {
       useChatStore.getState().stopAgent(agent.id)
     }
   }

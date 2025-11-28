@@ -192,6 +192,7 @@ interface AgentStreamDelta {
 
 interface AgentMessageEvent {
   conversationId: string
+  agentId: string
   message: ConversationMessage
 }
 

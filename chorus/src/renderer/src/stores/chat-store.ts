@@ -13,13 +13,18 @@ interface ChatStore {
   messages: ConversationMessage[]
   isLoading: boolean
   isStreaming: boolean
+  streamingConversationId: string | null  // Which conversation is currently streaming
   streamingContent: string
   agentStatus: AgentStatus
+  agentStatuses: Map<string, AgentStatus>  // Per-agent status tracking
   chatSidebarCollapsed: boolean
   chatSidebarTab: ChatSidebarTab
   error: string | null
   claudePath: string | null
   isClaudeChecked: boolean
+  // Unread tracking
+  unreadCounts: Map<string, number>       // conversationId → count
+  unreadByAgent: Map<string, number>      // agentId → total count
 
   // Actions
   loadConversations: (workspaceId: string, agentId: string) => Promise<void>
@@ -37,6 +42,13 @@ interface ChatStore {
   clearChat: () => void
   setError: (error: string | null) => void
   checkClaudeAvailable: () => Promise<void>
+  // Unread actions
+  incrementUnread: (conversationId: string, agentId: string) => void
+  clearUnread: (conversationId: string) => void
+  getUnreadCount: (conversationId: string) => number
+  getAgentUnreadCount: (agentId: string) => number
+  // Agent status helper
+  getAgentStatus: (agentId: string) => AgentStatus
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -46,13 +58,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   isLoading: false,
   isStreaming: false,
+  streamingConversationId: null,
   streamingContent: '',
   agentStatus: 'ready',
+  agentStatuses: new Map<string, AgentStatus>(),
   chatSidebarCollapsed: false,
   chatSidebarTab: 'conversations',
   error: null,
   claudePath: null,
   isClaudeChecked: false,
+  // Unread tracking
+  unreadCounts: new Map<string, number>(),
+  unreadByAgent: new Map<string, number>(),
 
   // Load conversations for a workspace/agent
   loadConversations: async (workspaceId: string, agentId: string) => {
@@ -99,6 +116,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           isLoading: false,
           streamingContent: ''
         })
+        // Clear unread count when selecting a conversation
+        get().clearUnread(conversationId)
       } else {
         set({ isLoading: false, error: result.error })
       }
@@ -163,8 +182,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
     }
 
-    // Set streaming state
-    set({ isStreaming: true, streamingContent: '', error: null })
+    // Set streaming state - track which conversation is streaming
+    set({ isStreaming: true, streamingConversationId: conversationId, streamingContent: '', error: null })
 
     try {
       // Get session ID from the active conversation
@@ -224,7 +243,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   stopAgent: async (agentId: string) => {
     try {
       await window.api.agent.stop(agentId)
-      set({ isStreaming: false, agentStatus: 'ready' })
+      const { agentStatuses, streamingConversationId, conversations } = get()
+
+      // Update per-agent status
+      const newStatuses = new Map(agentStatuses)
+      newStatuses.set(agentId, 'ready')
+
+      // Clear streaming if this agent was streaming
+      const streamingConv = conversations.find(c => c.id === streamingConversationId)
+      if (streamingConv?.agentId === agentId) {
+        set({ isStreaming: false, streamingConversationId: null, agentStatus: 'ready', agentStatuses: newStatuses })
+      } else {
+        set({ agentStatuses: newStatuses })
+      }
     } catch {
       // Silently fail - agent may already be stopped
     }
@@ -254,15 +285,40 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     // Message listener
     const unsubscribeMessage = window.api.agent.onMessage((event) => {
-      const { activeConversationId } = get()
+      const { activeConversationId, incrementUnread } = get()
       if (event.conversationId === activeConversationId) {
         get().appendMessage(event.message as ConversationMessage)
+      } else {
+        // Track unread for non-active conversations (only assistant/error messages)
+        const messageType = event.message.type
+        if (messageType === 'assistant' || messageType === 'error') {
+          incrementUnread(event.conversationId, event.agentId)
+        }
       }
     })
 
-    // Status listener
+    // Status listener - track per-agent status
     const unsubscribeStatus = window.api.agent.onStatus((event) => {
+      const { agentStatuses, streamingConversationId, conversations } = get()
+
+      // Update per-agent status map
+      const newStatuses = new Map(agentStatuses)
+      newStatuses.set(event.agentId, event.status)
+      set({ agentStatuses: newStatuses })
+
+      // Update global status (for backward compatibility)
       get().setAgentStatus(event.status)
+
+      // Clear streaming state if the streaming conversation's agent is no longer busy
+      if (event.status === 'ready' || event.status === 'error') {
+        if (streamingConversationId) {
+          const streamingConv = conversations.find(c => c.id === streamingConversationId)
+          if (streamingConv?.agentId === event.agentId) {
+            set({ isStreaming: false, streamingConversationId: null })
+          }
+        }
+      }
+
       if (event.error) {
         set({ error: event.error })
       }
@@ -293,6 +349,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       conversations: [],
       messages: [],
       streamingContent: '',
+      streamingConversationId: null,
       isStreaming: false,
       error: null
     })
@@ -315,5 +372,65 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } catch {
       set({ claudePath: null, isClaudeChecked: true })
     }
+  },
+
+  // Increment unread count for a conversation
+  incrementUnread: (conversationId: string, agentId: string) => {
+    const { unreadCounts, unreadByAgent } = get()
+
+    // Update conversation count
+    const newConvCounts = new Map(unreadCounts)
+    newConvCounts.set(conversationId, (newConvCounts.get(conversationId) || 0) + 1)
+
+    // Update agent count
+    const newAgentCounts = new Map(unreadByAgent)
+    newAgentCounts.set(agentId, (newAgentCounts.get(agentId) || 0) + 1)
+
+    set({ unreadCounts: newConvCounts, unreadByAgent: newAgentCounts })
+  },
+
+  // Clear unread count for a conversation
+  clearUnread: (conversationId: string) => {
+    const { unreadCounts, unreadByAgent, conversations } = get()
+
+    const count = unreadCounts.get(conversationId) || 0
+    if (count === 0) return
+
+    // Find the agent for this conversation
+    const conversation = conversations.find(c => c.id === conversationId)
+    const agentId = conversation?.agentId
+
+    // Update conversation count
+    const newConvCounts = new Map(unreadCounts)
+    newConvCounts.delete(conversationId)
+
+    // Update agent count
+    const newAgentCounts = new Map(unreadByAgent)
+    if (agentId) {
+      const agentCount = newAgentCounts.get(agentId) || 0
+      const newAgentCount = agentCount - count
+      if (newAgentCount <= 0) {
+        newAgentCounts.delete(agentId)
+      } else {
+        newAgentCounts.set(agentId, newAgentCount)
+      }
+    }
+
+    set({ unreadCounts: newConvCounts, unreadByAgent: newAgentCounts })
+  },
+
+  // Get unread count for a conversation
+  getUnreadCount: (conversationId: string) => {
+    return get().unreadCounts.get(conversationId) || 0
+  },
+
+  // Get total unread count for an agent
+  getAgentUnreadCount: (agentId: string) => {
+    return get().unreadByAgent.get(agentId) || 0
+  },
+
+  // Get status for a specific agent
+  getAgentStatus: (agentId: string) => {
+    return get().agentStatuses.get(agentId) || 'ready'
   }
 }))

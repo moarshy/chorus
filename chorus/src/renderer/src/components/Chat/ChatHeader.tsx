@@ -36,7 +36,11 @@ const StopIcon = () => (
 )
 
 export function ChatHeader({ agent, workspace }: ChatHeaderProps) {
-  const { agentStatus, isStreaming, stopAgent } = useChatStore()
+  const { isStreaming, stopAgent, getAgentStatus, activeConversationId, streamingConversationId } = useChatStore()
+  // Get status for THIS agent
+  const agentStatus = getAgentStatus(agent.id)
+  // Only show stop button if THIS conversation is streaming
+  const isThisConversationStreaming = isStreaming && streamingConversationId === activeConversationId
   const avatarColor = getAvatarColor(agent.name)
   const initials = getInitials(agent.name)
 
@@ -89,8 +93,8 @@ export function ChatHeader({ agent, workspace }: ChatHeaderProps) {
         </div>
       </div>
 
-      {/* Stop button - only visible when busy */}
-      {isStreaming && (
+      {/* Stop button - only visible when this conversation is streaming */}
+      {isThisConversationStreaming && (
         <button
           onClick={handleStop}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"

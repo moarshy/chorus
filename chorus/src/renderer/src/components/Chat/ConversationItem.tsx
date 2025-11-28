@@ -38,11 +38,12 @@ const TrashIcon = () => (
 )
 
 export function ConversationItem({ conversation }: ConversationItemProps) {
-  const { activeConversationId, selectConversation, deleteConversation } = useChatStore()
+  const { activeConversationId, selectConversation, deleteConversation, getUnreadCount } = useChatStore()
   const [isHovered, setIsHovered] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const isActive = activeConversationId === conversation.id
+  const unreadCount = getUnreadCount(conversation.id)
 
   const handleClick = () => {
     selectConversation(conversation.id)
@@ -77,8 +78,15 @@ export function ConversationItem({ conversation }: ConversationItemProps) {
               : 'hover:bg-hover border-l-2 border-transparent'
           }`}
         >
-          <div className="text-sm text-white truncate">
-            {truncateTitle(conversation.title)}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white truncate flex-1">
+              {truncateTitle(conversation.title)}
+            </span>
+            {unreadCount > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent text-white rounded-full min-w-[18px] text-center shrink-0">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </div>
           <div className="text-xs text-muted mt-0.5">
             {getRelativeTime(conversation.updatedAt)}

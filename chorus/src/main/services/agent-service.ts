@@ -95,6 +95,7 @@ export async function sendMessage(
   // Send user message to renderer
   mainWindow.webContents.send('agent:message', {
     conversationId,
+    agentId,
     message: userMessage
   })
 
@@ -110,6 +111,7 @@ export async function sendMessage(
     appendMessage(conversationId, errorMessage)
     mainWindow.webContents.send('agent:message', {
       conversationId,
+      agentId,
       message: errorMessage
     })
     mainWindow.webContents.send('agent:status', {
@@ -217,6 +219,7 @@ export async function sendMessage(
                   appendMessage(conversationId, toolMessage)
                   mainWindow.webContents.send('agent:message', {
                     conversationId,
+                    agentId,
                     message: toolMessage
                   })
                 } else if (block.type === 'thinking') {
@@ -248,6 +251,7 @@ export async function sendMessage(
                   appendMessage(conversationId, toolResultMessage)
                   mainWindow.webContents.send('agent:message', {
                     conversationId,
+                    agentId,
                     message: toolResultMessage
                   })
                 }
@@ -320,6 +324,7 @@ export async function sendMessage(
         appendMessage(conversationId, assistantMessage)
         mainWindow.webContents.send('agent:message', {
           conversationId,
+          agentId,
           message: assistantMessage
         })
 
@@ -356,6 +361,7 @@ export async function sendMessage(
         appendMessage(conversationId, errorMessage)
         mainWindow.webContents.send('agent:message', {
           conversationId,
+          agentId,
           message: errorMessage
         })
       }
@@ -378,6 +384,7 @@ export async function sendMessage(
       appendMessage(conversationId, errorMessage)
       mainWindow.webContents.send('agent:message', {
         conversationId,
+        agentId,
         message: errorMessage
       })
       mainWindow.webContents.send('agent:status', {
@@ -397,6 +404,7 @@ export async function sendMessage(
     appendMessage(conversationId, errorMessage)
     mainWindow.webContents.send('agent:message', {
       conversationId,
+      agentId,
       message: errorMessage
     })
     mainWindow.webContents.send('agent:status', {
