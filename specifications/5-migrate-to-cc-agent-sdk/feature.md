@@ -405,13 +405,39 @@ Support both CLI and SDK during transition:
 - Session forking for parallel exploration
 - Cost tracking dashboard with per-agent attribution
 
+## Known Limitations (SDK vs CLI)
+
+The following features are available in Claude Code CLI but **NOT in the SDK**:
+
+### AskUserQuestion Tool - NOT AVAILABLE
+
+The `AskUserQuestion` tool that allows Claude to ask structured questions to users is **CLI-only**. It is not exposed in the SDK.
+
+**Impact**: Agents cannot proactively ask clarifying questions via structured dialogs.
+
+**Workarounds**:
+1. Use `canUseTool` callback for tool-level permission prompts (already implemented)
+2. Design system prompts to request clarification as regular messages
+3. Build custom UI for user-initiated clarifications (future enhancement)
+
+**References**:
+- [GitHub Issue #327](https://github.com/anthropics/claude-agent-sdk-python/issues/327) - SDK support request (unresolved)
+- [GitHub Issue #10346](https://github.com/anthropics/claude-code/issues/10346) - Missing documentation
+
+### Other CLI-Only Features
+
+These may not be available or work differently in SDK:
+- Slash commands (custom `.claude/commands/`)
+- Skills system
+- Some MCP server configurations
+
 ## Open Questions & Risks
 
 ### Questions Needing Resolution
-1. **SDK in Electron main process**: Does the SDK work correctly in Electron's main process? May need testing.
-2. **Permission dialog blocking**: How to handle permission requests while allowing other conversations to continue?
-3. **Session migration**: Can existing CLI sessions be resumed with SDK, or do they need fresh starts?
-4. **System prompt handling**: How to pass agent markdown files as system prompts? (file path vs content)
+1. ~~**SDK in Electron main process**: Does the SDK work correctly in Electron's main process?~~ ✅ Confirmed working
+2. ~~**Permission dialog blocking**: How to handle permission requests while allowing other conversations to continue?~~ ✅ Implemented with async callbacks
+3. ~~**Session migration**: Can existing CLI sessions be resumed with SDK, or do they need fresh starts?~~ ✅ Sessions are compatible
+4. ~~**System prompt handling**: How to pass agent markdown files as system prompts?~~ ✅ Pass content via `systemPrompt` option
 
 ### Identified Risks
 1. **SDK maturity**: SDK is relatively new (v0.1.x). May encounter bugs or missing features.
