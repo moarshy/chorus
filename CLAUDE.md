@@ -17,6 +17,7 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 | **Multi-conversation support** | ✅ Complete | Unread badges, per-agent status tracking (Busy/Error), parallel agent conversations |
 | **5-migrate-to-cc-agent-sdk** | ✅ Complete | Migrated from CLI spawning to Claude Agent SDK for direct API integration |
 | **6-from-chat-to-work** | ✅ Complete | Details Panel with files changed, todo list, tool calls breakdown, and context metrics |
+| **7-tab-navigation** | ✅ Complete | VS Code-style tabs for switching between chat and files with persistence |
 
 **Before implementing**: Read the relevant spec files for requirements and implementation guidance.
 
@@ -26,6 +27,7 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 - `specifications/2-claude-code-settings/feature.md` - Permission modes, tool selection, model configuration
 - `specifications/6-from-chat-to-work/feature.md` - Details Panel UI spec
 - `specifications/6-from-chat-to-work/implementation-plan.md` - TodoWrite interception, file tracking, IPC events
+- `specifications/7-tab-navigation/feature.md` - Tab navigation for chat/file switching
 
 ## Architecture
 
@@ -85,6 +87,8 @@ chorus/
 **Permission Handling**: The SDK's `canUseTool` callback intercepts tool calls that require user approval. When triggered, a `PermissionDialog` component displays the tool name and input, allowing users to approve or deny. The dialog supports custom denial reasons that are fed back to the agent. See `chorus/src/renderer/src/components/dialogs/PermissionDialog.tsx`.
 
 **Details Panel**: The chat sidebar has a "Details" tab showing real-time conversation info: files changed (clickable to open in FileViewer), agent's todo list with status icons (pending/in_progress/completed), tool calls breakdown by tool type with success/failure counts, and context metrics (input/output tokens, cost). TodoWrite tool calls are intercepted and emitted via `agent:todo-update` IPC event. File changes from Write/Edit tools are tracked via `agent:file-changed` IPC event. State is stored in chat-store (`conversationTodos`, `conversationFiles` Maps) and reconstructed from JSONL on conversation load. See `ConversationDetails.tsx` and `specifications/6-from-chat-to-work/`.
+
+**Tab Navigation**: VS Code-style tabs enable switching between chat and file views. Clicking a file from Details panel opens it in a new tab while keeping the chat accessible. State is managed in workspace-store (`tabs`, `activeTabId`) and persisted via `ChorusSettings.openTabs`. The `selectFile` and `selectAgent` actions automatically create/activate tabs. Duplicate tabs are prevented by checking existing tabs. Tabs show workspace name in tooltip. See `TabBar.tsx` and `specifications/7-tab-navigation/`.
 
 ## Development
 

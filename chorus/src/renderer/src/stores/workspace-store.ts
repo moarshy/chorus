@@ -254,7 +254,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       return
     }
 
-    const { tabs, openTab } = get()
+    const { tabs, openTab, selectedWorkspaceId } = get()
     const filename = filePath.split('/').pop() || 'File'
 
     // Check if tab already exists
@@ -266,10 +266,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         activeTabId: existingTab.id
       })
     } else {
-      // Create new tab
+      // Create new tab with current workspace context
       const tabId = openTab({
         type: 'file',
         filePath,
+        workspaceId: selectedWorkspaceId || undefined,
         title: filename
       })
       set({

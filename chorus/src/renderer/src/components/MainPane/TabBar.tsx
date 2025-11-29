@@ -25,16 +25,26 @@ const CloseIcon = () => (
 interface TabItemProps {
   tab: Tab
   isActive: boolean
+  workspaceName?: string
   onActivate: () => void
   onClose: (e: React.MouseEvent) => void
 }
 
-function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
+function TabItem({ tab, isActive, workspaceName, onActivate, onClose }: TabItemProps) {
   const handleMiddleClick = (e: React.MouseEvent) => {
     if (e.button === 1) {
       e.preventDefault()
       onClose(e)
     }
+  }
+
+  // Build tooltip: workspace name + file path or title
+  const getTooltip = () => {
+    const prefix = workspaceName ? `${workspaceName}: ` : ''
+    if (tab.type === 'file' && tab.filePath) {
+      return `${prefix}${tab.filePath}`
+    }
+    return `${prefix}${tab.title}`
   }
 
   return (
@@ -49,7 +59,7 @@ function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
           : 'bg-sidebar text-muted hover:text-secondary hover:bg-hover'
         }
       `}
-      title={tab.type === 'file' ? tab.filePath : tab.title}
+      title={getTooltip()}
     >
       {/* Icon */}
       <span className="flex-shrink-0">
@@ -76,11 +86,20 @@ function TabItem({ tab, isActive, onActivate, onClose }: TabItemProps) {
 }
 
 export function TabBar() {
-  const { tabs, activeTabId, activateTab, closeTab } = useWorkspaceStore()
+  const { tabs, activeTabId, activateTab, closeTab, workspaces } = useWorkspaceStore()
 
   // Don't render if no tabs
   if (tabs.length === 0) {
     return null
+  }
+
+  // Helper to get workspace name for a tab
+  const getWorkspaceName = (tab: Tab): string | undefined => {
+    if (tab.workspaceId) {
+      const workspace = workspaces.find(w => w.id === tab.workspaceId)
+      return workspace?.name
+    }
+    return undefined
   }
 
   return (
@@ -90,6 +109,7 @@ export function TabBar() {
           key={tab.id}
           tab={tab}
           isActive={tab.id === activeTabId}
+          workspaceName={getWorkspaceName(tab)}
           onActivate={() => activateTab(tab.id)}
           onClose={(e) => {
             e.stopPropagation()
