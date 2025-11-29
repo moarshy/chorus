@@ -69,6 +69,7 @@ export function ChatView({ agent, workspace }: ChatViewProps) {
         collapsed={chatSidebarCollapsed}
         workspaceId={workspace.id}
         agentId={agent.id}
+        repoPath={workspace.path}
       />
 
       {/* Chat Area */}

@@ -30,11 +30,27 @@ export interface Workspace {
   settings?: WorkspaceSettings
 }
 
+// Tab type for persistence
+export interface Tab {
+  id: string
+  type: 'chat' | 'file'
+  workspaceId?: string
+  agentId?: string
+  filePath?: string
+  title: string
+}
+
+export interface OpenTabsState {
+  tabs: Tab[]
+  activeTabId: string | null
+}
+
 export interface ChorusSettings {
   rootWorkspaceDir: string
   theme: 'dark' | 'light'
   chatSidebarCollapsed: boolean
   chatSidebarWidth: number
+  openTabs?: OpenTabsState
 }
 
 interface StoreSchema {

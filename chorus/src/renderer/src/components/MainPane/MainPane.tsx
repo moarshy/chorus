@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { FileViewer } from './FileViewer'
 import { WorkspaceOverview } from './WorkspaceOverview'
+import { TabBar } from './TabBar'
 import { ChatView } from '../Chat'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 
@@ -42,14 +44,43 @@ export function MainPane() {
     workspaces,
     selectedWorkspaceId,
     selectedAgentId,
-    selectedFilePath
+    selectedFilePath,
+    tabs,
+    activeTabId,
+    loadTabs
   } = useWorkspaceStore()
+
+  // Load tabs on mount
+  useEffect(() => {
+    loadTabs()
+  }, [loadTabs])
 
   const selectedWorkspace = workspaces.find((ws) => ws.id === selectedWorkspaceId)
   const selectedAgent = selectedWorkspace?.agents.find((a) => a.id === selectedAgentId)
 
-  // Determine what to show
+  // Get active tab for rendering
+  const activeTab = tabs.find((t) => t.id === activeTabId)
+
+  // Determine what to show based on active tab or selection state
   const renderContent = () => {
+    // If there's an active tab, render based on tab type
+    if (activeTab) {
+      if (activeTab.type === 'file' && activeTab.filePath) {
+        return <FileViewer filePath={activeTab.filePath} />
+      }
+
+      if (activeTab.type === 'chat') {
+        // Find workspace and agent for the chat tab
+        const tabWorkspace = workspaces.find((ws) => ws.id === activeTab.workspaceId)
+        const tabAgent = tabWorkspace?.agents.find((a) => a.id === activeTab.agentId)
+
+        if (tabAgent && tabWorkspace) {
+          return <ChatView agent={tabAgent} workspace={tabWorkspace} />
+        }
+      }
+    }
+
+    // Fallback to old behavior for backward compatibility
     // File is selected - show file viewer
     if (selectedFilePath) {
       return <FileViewer filePath={selectedFilePath} />
@@ -73,6 +104,9 @@ export function MainPane() {
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Draggable title bar area for macOS */}
       <div className="h-10 titlebar-drag-region flex-shrink-0 border-b border-default" />
+
+      {/* Tab Bar */}
+      <TabBar />
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">{renderContent()}</div>

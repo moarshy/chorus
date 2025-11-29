@@ -1,10 +1,12 @@
 import { useChatStore } from '../../stores/chat-store'
 import { ConversationList } from './ConversationList'
+import { ConversationDetails } from './ConversationDetails'
 
 interface ChatSidebarProps {
   collapsed: boolean
   workspaceId: string
   agentId: string
+  repoPath?: string
 }
 
 // SVG Icons
@@ -41,12 +43,13 @@ const InfoIcon = () => (
   </svg>
 )
 
-export function ChatSidebar({ collapsed, workspaceId, agentId }: ChatSidebarProps) {
+export function ChatSidebar({ collapsed, workspaceId, agentId, repoPath }: ChatSidebarProps) {
   const {
     chatSidebarTab,
     setChatSidebarTab,
     setChatSidebarCollapsed,
-    createConversation
+    createConversation,
+    activeConversationId
   } = useChatStore()
 
   const handleNewConversation = async () => {
@@ -91,12 +94,10 @@ export function ChatSidebar({ collapsed, workspaceId, agentId }: ChatSidebarProp
             {chatSidebarTab === 'conversations' ? (
               <ConversationList />
             ) : (
-              <div className="flex items-center justify-center h-full text-muted text-sm">
-                <div className="text-center px-4">
-                  <InfoIcon />
-                  <p className="mt-2">Agent details coming soon</p>
-                </div>
-              </div>
+              <ConversationDetails
+                conversationId={activeConversationId}
+                repoPath={repoPath}
+              />
             )}
           </div>
 

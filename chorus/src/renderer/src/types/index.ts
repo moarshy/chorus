@@ -2,6 +2,8 @@
 export type {
   Agent,
   Workspace,
+  Tab,
+  OpenTabsState,
   ChorusSettings,
   DirectoryEntry,
   GitChange,
@@ -33,7 +35,15 @@ export type {
   // Conversation settings types
   PermissionMode,
   ConversationSettings,
-  WorkspaceSettings
+  WorkspaceSettings,
+  // SDK permission types
+  PermissionRequestEvent,
+  PermissionResponse,
+  FileChangedEvent,
+  // Todo tracking types
+  TodoItem,
+  TodoUpdateEvent,
+  FileChange
 } from '../../../preload/index.d'
 
 // UI-specific types

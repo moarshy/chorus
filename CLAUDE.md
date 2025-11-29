@@ -15,6 +15,9 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 | **Markdown rendering** | ✅ Complete | Chat messages render markdown, code blocks with syntax highlighting, mermaid diagrams |
 | **Tool calls UI** | ✅ Complete | Consecutive tool calls grouped into collapsible sections with input/output display |
 | **Multi-conversation support** | ✅ Complete | Unread badges, per-agent status tracking (Busy/Error), parallel agent conversations |
+| **5-migrate-to-cc-agent-sdk** | ✅ Complete | Migrated from CLI spawning to Claude Agent SDK for direct API integration |
+| **6-from-chat-to-work** | ✅ Complete | Details Panel with files changed, todo list, tool calls breakdown, and context metrics |
+| **7-tab-navigation** | ✅ Complete | VS Code-style tabs for switching between chat and files with persistence |
 
 **Before implementing**: Read the relevant spec files for requirements and implementation guidance.
 
@@ -22,6 +25,9 @@ All work follows specs in `specifications/`. Each sprint has a `feature.md` (req
 - `specifications/0-chorus-setup/implementation-plan.md` - Phased build approach, patterns to follow
 - `specifications/1-claude-code-integration/implementation-plan.md` - Claude Code integration plan
 - `specifications/2-claude-code-settings/feature.md` - Permission modes, tool selection, model configuration
+- `specifications/6-from-chat-to-work/feature.md` - Details Panel UI spec
+- `specifications/6-from-chat-to-work/implementation-plan.md` - TodoWrite interception, file tracking, IPC events
+- `specifications/7-tab-navigation/feature.md` - Tab navigation for chat/file switching
 
 ## Architecture
 
@@ -58,7 +64,7 @@ chorus/
 
 **Component Structure**: Components use inline SVG icons. No icon library.
 
-**Claude Code Integration**: Agents are spawned via `claude` CLI with `--output-format stream-json`. Messages are parsed and stored in JSONL format at `~/.chorus/sessions/{workspaceId}/{agentId}/`. See `docs/3-tools/claude-code/message-format.md` for the full message format spec.
+**Claude Agent SDK Integration**: Agents communicate via `@anthropic-ai/claude-agent-sdk` using the `query()` function directly (no CLI spawning). The SDK provides streaming messages, session management via `options.resume`, permission handling via `canUseTool` callback, and file change notifications via `PostToolUse` hooks. Messages are stored in JSONL format at `~/.chorus/sessions/{workspaceId}/{agentId}/`. See `docs/3-tools/claude-code/message-format.md` for the message format spec and `specifications/5-migrate-to-cc-agent-sdk/` for migration details.
 
 **Conversation Storage**: Each conversation has an index entry in `conversations.json` and messages in `{conversationId}-messages.jsonl`. Raw Claude Code messages are preserved in the `claudeMessage` field for session resumption.
 
@@ -70,15 +76,19 @@ chorus/
 
 **Multi-Agent Conversations**: Multiple agents can run simultaneously. State is tracked per-conversation (`streamingConversationId`) and per-agent (`agentStatuses` Map). Unread counts are tracked per-conversation and aggregated per-agent. Components: `ToolCallsGroup.tsx`, `AgentItem.tsx`, `ConversationItem.tsx`.
 
-**Conversation Settings**: Each conversation can have custom settings for permission mode, allowed tools, and model selection. Settings are stored in the conversation's `settings` field and passed to Claude CLI via `--permission-mode`, `--allowedTools`, and `--model` flags. The `ConversationToolbar` component in the chat header provides dropdowns for changing these settings. See `specifications/2-claude-code-settings/feature.md` for details.
+**Conversation Settings**: Each conversation can have custom settings for permission mode, allowed tools, and model selection. Settings are stored in the conversation's `settings` field and passed to the SDK via `options.permissionMode`, `options.allowedTools`, and `options.model`. The `ConversationToolbar` component in the chat header provides dropdowns for changing these settings. See `specifications/2-claude-code-settings/feature.md` for details.
 
 **Workspace Default Settings**: Each workspace can have default settings stored in the central `.chorus/config.json` (under each workspace's `settings` field) that apply to new conversations. The settings hierarchy is: Global defaults → Workspace defaults → Per-conversation overrides. The `WorkspaceSettings` component in the Workspace Overview page allows users to configure defaults for permission mode, allowed tools, and model selection.
 
-**Session Resumption**: Conversations use Claude Code's `--resume <session-id>` to continue sessions. The sessionId is captured from the CLI's `system.init` message and stored in the conversation's `sessionId` field. The `sessionCreatedAt` timestamp tracks when the session was created for expiry detection (sessions expire after ~25 days). CRITICAL: The renderer must sync sessionId from backend after first message - this is done via the `agent:session-update` IPC event. See `docs/3-tools/claude-code/session-management.md` for detailed documentation.
+**Session Resumption**: Conversations use the SDK's `options.resume` with session ID to continue sessions. The sessionId is captured from the `system.init` message and stored in the conversation's `sessionId` field. The `sessionCreatedAt` timestamp tracks when the session was created for expiry detection (sessions expire after ~25 days). CRITICAL: The renderer must sync sessionId from backend after first message - this is done via the `agent:session-update` IPC event. See `docs/3-tools/claude-code/session-management.md` for detailed documentation.
 
-**Workspace Isolation**: Each agent runs in its workspace directory (the cloned repo path), NOT the parent Chorus directory. For example, if `mcplatform` repo is added to Chorus at `cc-slack/mcplatform`, Claude Code sessions run with `cwd: cc-slack/mcplatform`. The agent should NOT have access to `cc-slack/` parent. This is enforced in `agent-service.ts` via the `cwd: repoPath` option when spawning Claude CLI.
+**Workspace Isolation**: Each agent runs in its workspace directory (the cloned repo path), NOT the parent Chorus directory. For example, if `mcplatform` repo is added to Chorus at `cc-slack/mcplatform`, Claude Code sessions run with `cwd: cc-slack/mcplatform`. The agent should NOT have access to `cc-slack/` parent. This is enforced in `agent-sdk-service.ts` via the `cwd: repoPath` option.
 
-**Settings on Resume**: Due to Claude Code bugs (GitHub #1523 for model, #12070 for permission mode), model/permission settings don't persist reliably across sessions. Chorus always passes `--model`, `--permission-mode`, and `--allowedTools` flags on every CLI invocation when resuming a session, ensuring settings are applied correctly. When users change settings mid-conversation, a notification warns them about implications.
+**Permission Handling**: The SDK's `canUseTool` callback intercepts tool calls that require user approval. When triggered, a `PermissionDialog` component displays the tool name and input, allowing users to approve or deny. The dialog supports custom denial reasons that are fed back to the agent. See `chorus/src/renderer/src/components/dialogs/PermissionDialog.tsx`.
+
+**Details Panel**: The chat sidebar has a "Details" tab showing real-time conversation info: files changed (clickable to open in FileViewer), agent's todo list with status icons (pending/in_progress/completed), tool calls breakdown by tool type with success/failure counts, and context metrics (input/output tokens, cost). TodoWrite tool calls are intercepted and emitted via `agent:todo-update` IPC event. File changes from Write/Edit tools are tracked via `agent:file-changed` IPC event. State is stored in chat-store (`conversationTodos`, `conversationFiles` Maps) and reconstructed from JSONL on conversation load. See `ConversationDetails.tsx` and `specifications/6-from-chat-to-work/`.
+
+**Tab Navigation**: VS Code-style tabs enable switching between chat and file views. Clicking a file from Details panel opens it in a new tab while keeping the chat accessible. State is managed in workspace-store (`tabs`, `activeTabId`) and persisted via `ChorusSettings.openTabs`. The `selectFile` and `selectAgent` actions automatically create/activate tabs. Duplicate tabs are prevented by checking existing tabs. Tabs show workspace name in tooltip. See `TabBar.tsx` and `specifications/7-tab-navigation/`.
 
 ## Development
 
@@ -94,7 +104,8 @@ bun run typecheck  # Type check all code
 
 - `chorus/src/main/index.ts` - IPC handler registration
 - `chorus/src/main/store/index.ts` - Data persistence schema
-- `chorus/src/main/services/agent-service.ts` - Claude CLI spawning, streaming JSON parsing
+- `chorus/src/main/services/agent-service.ts` - Agent API facade (delegates to SDK service)
+- `chorus/src/main/services/agent-sdk-service.ts` - Claude Agent SDK integration, streaming, permissions
 - `chorus/src/main/services/conversation-service.ts` - Conversation CRUD, JSONL message storage
 - `chorus/src/main/services/git-service.ts` - Git operations (status, branches, checkout, clone)
 - `chorus/src/renderer/src/stores/workspace-store.ts` - Main UI state
@@ -106,5 +117,8 @@ bun run typecheck  # Type check all code
 - `chorus/src/preload/index.d.ts` - Type definitions including Claude Code message types
 - `chorus/src/renderer/src/components/Chat/ConversationToolbar.tsx` - Settings toolbar with model/permission/tools dropdowns
 - `chorus/src/renderer/src/components/MainPane/WorkspaceSettings.tsx` - Workspace settings UI in overview
+- `chorus/src/renderer/src/components/dialogs/PermissionDialog.tsx` - SDK permission request dialog
+- `chorus/src/renderer/src/components/Chat/ConversationDetails.tsx` - Details panel with files, todos, tool calls, metrics
 - `docs/3-tools/claude-code/message-format.md` - Claude Code stream-json format documentation
 - `docs/3-tools/claude-code/session-management.md` - Session resumption best practices and known issues
+- `specifications/5-migrate-to-cc-agent-sdk/feature.md` - SDK migration requirements and known limitations

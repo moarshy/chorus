@@ -3,12 +3,15 @@ import { Sidebar } from './components/Sidebar/Sidebar'
 import { MainPane } from './components/MainPane/MainPane'
 import { SettingsDialog } from './components/dialogs/SettingsDialog'
 import { AddWorkspaceDialog } from './components/dialogs/AddWorkspaceDialog'
+import { PermissionDialog } from './components/dialogs/PermissionDialog'
 import { useWorkspaceStore } from './stores/workspace-store'
 import { useUIStore } from './stores/ui-store'
+import { useChatStore } from './stores/chat-store'
 
 function App() {
   const { loadWorkspaces, loadSettings } = useWorkspaceStore()
   const { isSettingsOpen, isAddWorkspaceOpen } = useUIStore()
+  const { pendingPermissionRequest, respondToPermission } = useChatStore()
 
   useEffect(() => {
     // Load settings and workspaces on mount
@@ -34,6 +37,12 @@ function App() {
       {/* Dialogs */}
       {isSettingsOpen && <SettingsDialog />}
       {isAddWorkspaceOpen && <AddWorkspaceDialog />}
+      {pendingPermissionRequest && (
+        <PermissionDialog
+          request={pendingPermissionRequest}
+          onResponse={respondToPermission}
+        />
+      )}
     </div>
   )
 }

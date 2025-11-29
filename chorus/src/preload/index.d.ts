@@ -33,11 +33,27 @@ interface Workspace {
   agents: Agent[]
 }
 
+// Tab type for persistence
+interface Tab {
+  id: string
+  type: 'chat' | 'file'
+  workspaceId?: string
+  agentId?: string
+  filePath?: string
+  title: string
+}
+
+interface OpenTabsState {
+  tabs: Tab[]
+  activeTabId: string | null
+}
+
 interface ChorusSettings {
   rootWorkspaceDir: string
   theme: 'dark' | 'light'
   chatSidebarCollapsed: boolean
   chatSidebarWidth: number
+  openTabs?: OpenTabsState
 }
 
 // ============================================
@@ -211,6 +227,49 @@ interface AgentSessionUpdateEvent {
   sessionCreatedAt: string
 }
 
+// Permission request event from SDK canUseTool callback
+interface PermissionRequestEvent {
+  requestId: string
+  conversationId: string
+  toolName: string
+  toolInput: Record<string, unknown>
+}
+
+// Permission response for SDK canUseTool callback
+interface PermissionResponse {
+  approved: boolean
+  reason?: string
+  stopCompletely?: boolean
+}
+
+// File change event from SDK PostToolUse hook
+interface FileChangedEvent {
+  conversationId: string
+  filePath: string
+  toolName: string
+}
+
+// Todo item from TodoWrite tool
+interface TodoItem {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  activeForm: string
+}
+
+// Todo update event from TodoWrite tool interception
+interface TodoUpdateEvent {
+  conversationId: string
+  todos: TodoItem[]
+  timestamp: string
+}
+
+// File change record for Details panel
+interface FileChange {
+  path: string
+  toolName: 'Write' | 'Edit'
+  timestamp: string
+}
+
 interface DirectoryEntry {
   name: string
   path: string
@@ -289,6 +348,7 @@ interface SettingsAPI {
   set: (settings: Partial<ChorusSettings>) => Promise<ApiResult>
   getRootDir: () => Promise<ApiResult<string>>
   setRootDir: (path: string) => Promise<ApiResult>
+  setOpenTabs: (openTabs: OpenTabsState) => Promise<ApiResult>
 }
 
 interface WorkspaceAPI {
@@ -337,12 +397,19 @@ interface ConversationAPI {
 
 interface AgentAPI {
   send: (conversationId: string, message: string, repoPath: string, sessionId?: string, agentFilePath?: string) => Promise<ApiResult>
-  stop: (agentId: string) => Promise<ApiResult>
+  stop: (agentId: string, conversationId?: string) => Promise<ApiResult>
   checkAvailable: () => Promise<ApiResult<string | null>>
+  // Permission response (for SDK canUseTool callback)
+  respondPermission: (requestId: string, response: PermissionResponse) => Promise<ApiResult>
+  // Event listeners
   onStreamDelta: (callback: (event: AgentStreamDelta) => void) => () => void
   onMessage: (callback: (event: AgentMessageEvent) => void) => () => void
   onStatus: (callback: (event: AgentStatusEvent) => void) => () => void
   onSessionUpdate: (callback: (event: AgentSessionUpdateEvent) => void) => () => void
+  // SDK-only events
+  onPermissionRequest: (callback: (event: PermissionRequestEvent) => void) => () => void
+  onFileChanged: (callback: (event: FileChangedEvent) => void) => () => void
+  onTodoUpdate: (callback: (event: TodoUpdateEvent) => void) => () => void
 }
 
 interface SessionAPI {
@@ -379,6 +446,8 @@ declare global {
 export type {
   Agent,
   Workspace,
+  Tab,
+  OpenTabsState,
   ChorusSettings,
   DirectoryEntry,
   GitChange,
@@ -395,6 +464,14 @@ export type {
   AgentMessageEvent,
   AgentStatusEvent,
   AgentSessionUpdateEvent,
+  // SDK permission types
+  PermissionRequestEvent,
+  PermissionResponse,
+  FileChangedEvent,
+  // Todo tracking types
+  TodoItem,
+  TodoUpdateEvent,
+  FileChange,
   // Claude Code message types
   TextBlock,
   ToolUseBlock,
