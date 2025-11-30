@@ -1,6 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useChatStore } from '../../stores/chat-store'
-import type { ConversationSettings, PermissionMode } from '../../types'
+import type { ConversationSettings, PermissionMode, ConversationMessage } from '../../types'
+import {
+  calculateContextMetrics,
+  getContextLevel,
+  getProgressBarColor
+} from '../../utils/context-limits'
 
 // Default settings
 const DEFAULT_SETTINGS: ConversationSettings = {
@@ -48,6 +53,57 @@ const CheckIcon = () => (
   </svg>
 )
 
+const WarningIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+)
+
+// Context Progress Bar Component
+interface ContextBadgeProps {
+  messages: ConversationMessage[]
+}
+
+function ContextBadge({ messages }: ContextBadgeProps) {
+  const metrics = useMemo(
+    () => calculateContextMetrics(messages),
+    [messages]
+  )
+
+  const level = getContextLevel(metrics.estimatedPercentage)
+  const progressColor = getProgressBarColor(level)
+  const showWarning = level === 'high' || level === 'critical'
+
+  // Don't show if no tokens yet
+  if (metrics.totalTokens === 0) {
+    return null
+  }
+
+  const tooltip =
+    `~${metrics.estimatedUsage.toLocaleString()} / ${metrics.contextLimit.toLocaleString()} tokens (estimated)\n` +
+    `Total: ${metrics.totalTokens.toLocaleString()} tokens\n` +
+    `Cache read: ${metrics.cacheReadTokens.toLocaleString()} (not counted against context)`
+
+  return (
+    <div
+      className="flex items-center gap-2 px-2 py-1"
+      title={tooltip}
+    >
+      {showWarning && <WarningIcon />}
+      <span className="text-xs text-muted whitespace-nowrap">Context</span>
+      <div className="w-20 h-2 bg-hover rounded-full overflow-hidden">
+        <div
+          className={`h-full ${progressColor} transition-all duration-300`}
+          style={{ width: `${Math.min(metrics.estimatedPercentage, 100)}%` }}
+        />
+      </div>
+      <span className="text-xs text-muted w-8">~{Math.round(metrics.estimatedPercentage)}%</span>
+    </div>
+  )
+}
+
 interface DropdownProps {
   label: string
   value: string
@@ -89,9 +145,10 @@ function Dropdown({ label, value, children }: DropdownProps) {
 
 interface ConversationToolbarProps {
   conversationId: string
+  messages: ConversationMessage[]
 }
 
-export function ConversationToolbar({ conversationId }: ConversationToolbarProps) {
+export function ConversationToolbar({ conversationId, messages }: ConversationToolbarProps) {
   const { conversations, updateConversationSettings } = useChatStore()
   const [notification, setNotification] = useState<string | null>(null)
   const conversation = conversations.find(c => c.id === conversationId)
@@ -212,6 +269,12 @@ export function ConversationToolbar({ conversationId }: ConversationToolbarProps
           </div>
         </div>
       </Dropdown>
+
+      {/* Spacer to push context badge to the right */}
+      <div className="flex-1" />
+
+      {/* Context Badge */}
+      <ContextBadge messages={messages} />
     </div>
   )
 }

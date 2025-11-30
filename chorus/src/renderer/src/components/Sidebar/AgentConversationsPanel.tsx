@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useChatStore } from '../../stores/chat-store'
 import { AgentHeader } from './AgentHeader'
@@ -15,6 +15,13 @@ const PlusIcon = () => (
 const MessageIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+)
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
 )
 
@@ -38,42 +45,68 @@ interface ConversationItemProps {
   conversation: Conversation
   isActive: boolean
   onClick: () => void
+  onDelete: () => void
 }
 
-function ConversationItem({ conversation, isActive, onClick }: ConversationItemProps) {
+function ConversationItem({ conversation, isActive, onClick, onDelete }: ConversationItemProps) {
   const { getUnreadCount } = useChatStore()
+  const [isHovered, setIsHovered] = useState(false)
   const unreadCount = getUnreadCount(conversation.id)
 
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onDelete()
+  }
+
   return (
-    <button
-      onClick={onClick}
-      className={`w-full px-3 py-2.5 text-left transition-colors flex items-center gap-2 ${
-        isActive ? 'bg-selected text-white' : 'hover:bg-hover text-secondary'
-      }`}
+    <div
+      className="relative group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <MessageIcon />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm truncate">{conversation.title}</p>
-        <p className="text-xs text-muted">{formatDate(conversation.updatedAt)}</p>
-      </div>
-      {unreadCount > 0 && !isActive && (
-        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent text-white rounded-full min-w-[18px] text-center">
-          {unreadCount > 99 ? '99+' : unreadCount}
-        </span>
+      <button
+        onClick={onClick}
+        className={`w-full px-3 py-2.5 pr-8 text-left transition-colors flex items-center gap-2 ${
+          isActive ? 'bg-selected text-white' : 'hover:bg-hover text-secondary'
+        }`}
+      >
+        <MessageIcon />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm truncate">{conversation.title}</p>
+          <p className="text-xs text-muted">{formatDate(conversation.updatedAt)}</p>
+        </div>
+        {unreadCount > 0 && !isActive && (
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-accent text-white rounded-full min-w-[18px] text-center">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Delete button on hover */}
+      {isHovered && (
+        <button
+          onClick={handleDeleteClick}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted hover:text-red-400 transition-colors rounded hover:bg-red-500/10"
+          title="Delete conversation"
+        >
+          <TrashIcon />
+        </button>
       )}
-    </button>
+    </div>
   )
 }
 
 export function AgentConversationsPanel() {
-  const { selectedAgentId, selectedWorkspaceId, selectedConversationId, workspaces, selectAgent, selectConversation } = useWorkspaceStore()
+  const { selectedAgentId, selectedWorkspaceId, selectedConversationId, workspaces, selectAgent, selectConversation, closeTab, tabs } = useWorkspaceStore()
   const {
     loadConversations,
-    initEventListeners,
     createConversation,
+    deleteConversation,
     conversations,
     isLoading
   } = useChatStore()
+
+  const [deleteConfirm, setDeleteConfirm] = useState<Conversation | null>(null)
 
   const workspace = workspaces.find((ws) => ws.id === selectedWorkspaceId)
   const agent = workspace?.agents.find((a) => a.id === selectedAgentId)
@@ -84,12 +117,6 @@ export function AgentConversationsPanel() {
       loadConversations(workspace.id, agent.id)
     }
   }, [workspace?.id, agent?.id, loadConversations])
-
-  // Initialize event listeners
-  useEffect(() => {
-    const cleanup = initEventListeners()
-    return cleanup
-  }, [initEventListeners])
 
   if (!agent || !workspace) {
     return null
@@ -105,6 +132,28 @@ export function AgentConversationsPanel() {
 
   const handleSelectConversation = (conversation: Conversation) => {
     selectConversation(conversation.id, agent.id, workspace.id, conversation.title)
+  }
+
+  const handleDeleteClick = (conversation: Conversation) => {
+    setDeleteConfirm(conversation)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return
+
+    // Close any open tabs for this conversation
+    const tabToClose = tabs.find(t => t.type === 'chat' && t.conversationId === deleteConfirm.id)
+    if (tabToClose) {
+      closeTab(tabToClose.id)
+    }
+
+    // Delete the conversation
+    await deleteConversation(deleteConfirm.id)
+    setDeleteConfirm(null)
+  }
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm(null)
   }
 
   return (
@@ -141,10 +190,42 @@ export function AgentConversationsPanel() {
               conversation={conv}
               isActive={conv.id === selectedConversationId}
               onClick={() => handleSelectConversation(conv)}
+              onDelete={() => handleDeleteClick(conv)}
             />
           ))
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-50 bg-black/50"
+            onClick={handleCancelDelete}
+          />
+          {/* Dialog */}
+          <div className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-sidebar border border-default rounded-lg shadow-xl p-4 min-w-[300px]">
+            <h3 className="text-white font-medium mb-2">Delete conversation?</h3>
+            <p className="text-muted text-sm mb-1 truncate">"{deleteConfirm.title}"</p>
+            <p className="text-muted text-sm mb-4">This will permanently delete all messages. This cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={handleCancelDelete}
+                className="px-3 py-1.5 text-sm text-muted hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

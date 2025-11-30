@@ -41,7 +41,6 @@ export function ChatTab({ conversationId, agentId, workspaceId }: ChatTabProps) 
   const { workspaces } = useWorkspaceStore()
   const {
     selectConversation,
-    initEventListeners,
     isStreaming,
     streamingConversationId,
     activeConversationId,
@@ -49,7 +48,8 @@ export function ChatTab({ conversationId, agentId, workspaceId }: ChatTabProps) 
     error,
     setError,
     claudePath,
-    isClaudeChecked
+    isClaudeChecked,
+    messages
   } = useChatStore()
 
   const workspace = workspaces.find((ws) => ws.id === workspaceId)
@@ -60,16 +60,12 @@ export function ChatTab({ conversationId, agentId, workspaceId }: ChatTabProps) 
 
   // Load conversation when tab is mounted or conversationId changes
   useEffect(() => {
-    if (conversationId && conversationId !== activeConversationId) {
+    if (conversationId) {
+      // Always load the conversation when conversationId changes
+      // This ensures messages are loaded even if activeConversationId was stale
       selectConversation(conversationId)
     }
-  }, [conversationId, activeConversationId, selectConversation])
-
-  // Initialize event listeners
-  useEffect(() => {
-    const cleanup = initEventListeners()
-    return cleanup
-  }, [initEventListeners])
+  }, [conversationId, selectConversation])
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -98,7 +94,7 @@ export function ChatTab({ conversationId, agentId, workspaceId }: ChatTabProps) 
   return (
     <div className="flex flex-col h-full bg-main">
       {/* Settings toolbar */}
-      <ConversationToolbar conversationId={conversationId} />
+      <ConversationToolbar conversationId={conversationId} messages={messages} />
 
       {/* Claude CLI Not Installed Warning */}
       {isClaudeChecked && !claudePath && (
@@ -139,7 +135,7 @@ export function ChatTab({ conversationId, agentId, workspaceId }: ChatTabProps) 
       )}
 
       {/* Message list - takes remaining space */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0">
         <MessageList />
       </div>
 

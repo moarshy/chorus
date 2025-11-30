@@ -84,17 +84,37 @@ export interface ClaudeUserMessage {
   }
 }
 
+// Model usage breakdown from result message
+export interface ModelUsageEntry {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  webSearchRequests: number
+  costUSD: number
+  contextWindow: number
+}
+
 // Claude Code result message
 export interface ClaudeResultMessage {
   type: 'result'
   result: string
-  subtype: 'success' | 'error'
+  subtype: 'success' | 'error' | 'error_max_turns' | 'error_during_execution'
   session_id: string
   total_cost_usd: number
   duration_ms: number
   duration_api_ms: number
   num_turns: number
   is_error: boolean
+  // Cumulative token usage for the entire turn
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_creation_input_tokens: number
+    cache_read_input_tokens: number
+  }
+  // Per-model breakdown with context window info
+  modelUsage: Record<string, ModelUsageEntry>
 }
 
 // Union of all Claude Code message types
@@ -132,6 +152,12 @@ export interface ConversationMessage {
   durationMs?: number
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
+  // Context window from the model used (from result.modelUsage)
+  contextWindow?: number
+  // Number of turns in this session
+  numTurns?: number
 }
 
 // Conversation Settings Types

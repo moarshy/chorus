@@ -2,6 +2,11 @@ import { useMemo } from 'react'
 import { useChatStore } from '../../stores/chat-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import type { TodoItem, FileChange, ConversationMessage } from '../../types'
+import {
+  calculateContextMetrics,
+  getContextLevel,
+  getProgressBarColor
+} from '../../utils/context-limits'
 
 interface ConversationDetailsProps {
   conversationId: string | null
@@ -294,47 +299,103 @@ function ToolSummarySection({ messages }: { messages: ConversationMessage[] }) {
   )
 }
 
-// Context Metrics Section
+// Format duration in a human-readable way
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const seconds = Math.floor(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`
+}
+
+// Context Metrics Section - Uses result message as single source of truth
 function ContextMetricsSection({ messages }: { messages: ConversationMessage[] }) {
-  const metrics = useMemo(() => {
-    let totalInput = 0
-    let totalOutput = 0
-    let totalCost = 0
+  const metrics = useMemo(
+    () => calculateContextMetrics(messages),
+    [messages]
+  )
 
-    messages.forEach(m => {
-      if (m.inputTokens) totalInput += m.inputTokens
-      if (m.outputTokens) totalOutput += m.outputTokens
-      if (m.costUsd) totalCost += m.costUsd
-    })
+  const level = getContextLevel(metrics.estimatedPercentage)
+  const progressColor = getProgressBarColor(level)
 
-    return { totalInput, totalOutput, totalCost }
-  }, [messages])
-
-  const hasMetrics = metrics.totalInput > 0 || metrics.totalOutput > 0 || metrics.totalCost > 0
+  if (metrics.totalTokens === 0) {
+    return (
+      <Section title="Context" icon={<ChartIcon />}>
+        <p className="px-3 text-xs text-muted">No metrics available yet</p>
+      </Section>
+    )
+  }
 
   return (
     <Section title="Context" icon={<ChartIcon />}>
-      <div className="px-3 space-y-1">
-        {hasMetrics ? (
-          <>
+      <div className="px-3 space-y-3">
+        {/* Progress Bar */}
+        <div>
+          <div className="flex justify-between text-xs text-muted mb-1">
+            <span>Context Usage</span>
+            <span>{Math.round(metrics.estimatedPercentage)}%</span>
+          </div>
+          <div className="h-2 bg-hover rounded-full overflow-hidden">
+            <div
+              className={`h-full ${progressColor} transition-all duration-300`}
+              style={{ width: `${Math.min(metrics.estimatedPercentage, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-muted mt-1">
+            <span>{metrics.estimatedUsage.toLocaleString()}</span>
+            <span>{metrics.contextLimit.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Token Breakdown */}
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted uppercase tracking-wide">Tokens</div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted">Input</span>
+            <span className="text-primary font-mono">{metrics.inputTokens.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted">Output</span>
+            <span className="text-primary font-mono">{metrics.outputTokens.toLocaleString()}</span>
+          </div>
+          {metrics.cacheReadTokens > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Input tokens</span>
-              <span className="text-primary">{metrics.totalInput.toLocaleString()}</span>
+              <span className="text-muted">Cache read</span>
+              <span className="text-green-400 font-mono">{metrics.cacheReadTokens.toLocaleString()}</span>
             </div>
+          )}
+          {metrics.cacheCreationTokens > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted">Output tokens</span>
-              <span className="text-primary">{metrics.totalOutput.toLocaleString()}</span>
+              <span className="text-muted">Cache write</span>
+              <span className="text-primary font-mono">{metrics.cacheCreationTokens.toLocaleString()}</span>
             </div>
-            {metrics.totalCost > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">Cost</span>
-                <span className="text-primary">${metrics.totalCost.toFixed(4)}</span>
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-xs text-muted">No metrics available</p>
-        )}
+          )}
+        </div>
+
+        {/* Session Info */}
+        <div className="space-y-1.5">
+          <div className="border-t border-default pt-2" />
+          <div className="text-xs text-muted uppercase tracking-wide">Session</div>
+          {metrics.numTurns > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Turns</span>
+              <span className="text-primary font-mono">{metrics.numTurns}</span>
+            </div>
+          )}
+          {metrics.durationMs > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Duration</span>
+              <span className="text-primary font-mono">{formatDuration(metrics.durationMs)}</span>
+            </div>
+          )}
+          {metrics.totalCost > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted">Cost</span>
+              <span className="text-primary font-mono">${metrics.totalCost.toFixed(4)}</span>
+            </div>
+          )}
+        </div>
       </div>
     </Section>
   )

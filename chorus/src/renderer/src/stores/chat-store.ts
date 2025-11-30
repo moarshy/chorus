@@ -284,6 +284,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   appendMessage: (message: ConversationMessage) => {
     const { messages, conversations, activeConversationId } = get()
 
+    // Check for duplicate by UUID to prevent double-adding messages
+    // This can happen due to race conditions between IPC events and conversation loading
+    if (messages.some(m => m.uuid === message.uuid)) {
+      return // Message already exists, skip
+    }
+
     // Update messages
     set({ messages: [...messages, message] })
 

@@ -36,7 +36,6 @@ export function AgentChatPanel() {
   const { selectedAgentId, selectedWorkspaceId, workspaces, selectAgent } = useWorkspaceStore()
   const {
     loadConversations,
-    initEventListeners,
     clearChat,
     createConversation,
     isStreaming,
@@ -61,12 +60,6 @@ export function AgentChatPanel() {
       loadConversations(workspace.id, agent.id)
     }
   }, [workspace?.id, agent?.id, loadConversations])
-
-  // Initialize event listeners
-  useEffect(() => {
-    const cleanup = initEventListeners()
-    return cleanup
-  }, [initEventListeners])
 
   // Clear chat when unmounting
   useEffect(() => {

@@ -37,13 +37,13 @@ const WarningIcon = () => (
 )
 
 export function ChatArea({ agent, workspace }: ChatAreaProps) {
-  const { error, setError, claudePath, isClaudeChecked, activeConversationId } = useChatStore()
+  const { error, setError, claudePath, isClaudeChecked, activeConversationId, messages } = useChatStore()
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <ChatHeader agent={agent} workspace={workspace} />
       {activeConversationId && (
-        <ConversationToolbar conversationId={activeConversationId} />
+        <ConversationToolbar conversationId={activeConversationId} messages={messages} />
       )}
 
       {/* Claude CLI Not Installed Warning */}

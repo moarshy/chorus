@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { MainPane } from './components/MainPane/MainPane'
 import { RightPanel } from './components/RightPanel'
@@ -24,7 +24,10 @@ function App() {
     setRightPanelWidth,
     rightPanelCollapsed
   } = useUIStore()
-  const { pendingPermissionRequest, respondToPermission } = useChatStore()
+  const { pendingPermissionRequest, respondToPermission, initEventListeners } = useChatStore()
+
+  // Track if event listeners have been initialized (prevent duplicates)
+  const eventListenersInitialized = useRef(false)
 
   const handleLeftResize = useCallback((delta: number) => {
     setLeftPanelWidth(Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, leftPanelWidth + delta)))
@@ -49,6 +52,18 @@ function App() {
       window.removeEventListener('focus', handleFocus)
     }
   }, [loadWorkspaces, loadSettings])
+
+  // Initialize event listeners ONCE at the app level
+  useEffect(() => {
+    if (eventListenersInitialized.current) return
+    eventListenersInitialized.current = true
+
+    const cleanup = initEventListeners()
+    return () => {
+      cleanup()
+      eventListenersInitialized.current = false
+    }
+  }, [initEventListeners])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main text-primary">

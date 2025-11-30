@@ -360,6 +360,8 @@ export async function sendMessageSDK(
               // IMPORTANT: Flush accumulated streaming text BEFORE emitting tool_use
               // This ensures text appears before the tool calls that follow it
               if (streamingContent.trim()) {
+                // Note: Don't include token info on intermediate messages
+                // Token info is only meaningful on the final message of a turn
                 const textMessage: ConversationMessage = {
                   uuid: uuidv4(),
                   type: 'assistant',
@@ -473,6 +475,9 @@ export async function sendMessageSDK(
       if (msg.type === 'result') {
         const resultMsg = msg as unknown as ClaudeResultMessage
         resultMessage = resultMsg
+        // Log result message for debugging token usage
+        console.log('[SDK] Result message usage:', JSON.stringify(resultMsg.usage, null, 2))
+        console.log('[SDK] Result message cost:', resultMsg.total_cost_usd)
         if (resultMsg.session_id && !capturedSessionId) {
           const sessionCreatedAtNow = new Date().toISOString()
           capturedSessionId = resultMsg.session_id
@@ -493,6 +498,12 @@ export async function sendMessageSDK(
 
     // Save the complete assistant message if we have content
     if (streamingContent.trim()) {
+      // Use cumulative token usage from result message (authoritative source)
+      // Access usage from raw objects to avoid type narrowing issues
+      const rawResult = resultMessage as unknown as Record<string, unknown> | undefined
+      const rawAssistant = currentAssistantMessage?.message as unknown as Record<string, unknown> | undefined
+      const usage = (rawResult?.usage || rawAssistant?.usage) as Record<string, number> | undefined
+
       const assistantMessage: ConversationMessage = {
         uuid: uuidv4(),
         type: 'assistant',
@@ -500,8 +511,11 @@ export async function sendMessageSDK(
         timestamp: new Date().toISOString(),
         sessionId: capturedSessionId || undefined,
         claudeMessage: currentAssistantMessage || undefined,
-        inputTokens: currentAssistantMessage?.message?.usage?.input_tokens,
-        outputTokens: currentAssistantMessage?.message?.usage?.output_tokens,
+        // Use cumulative usage from result message
+        inputTokens: usage?.input_tokens,
+        outputTokens: usage?.output_tokens,
+        cacheReadTokens: usage?.cache_read_input_tokens,
+        cacheCreationTokens: usage?.cache_creation_input_tokens,
         costUsd: resultMessage?.total_cost_usd,
         durationMs: resultMessage?.duration_ms
       }
@@ -520,8 +534,27 @@ export async function sendMessageSDK(
       }
     }
 
-    // Store result message with session stats
+    // Store result message with session stats and cumulative token usage
     if (resultMessage) {
+      // Access usage and modelUsage from the raw message object (avoid type narrowing issues)
+      const rawResult = resultMessage as unknown as Record<string, unknown>
+      const usage = rawResult.usage as Record<string, number> | undefined
+      const modelUsage = rawResult.modelUsage as Record<string, { contextWindow?: number }> | undefined
+
+      // Get context window from the primary model (usually opus or the main model used)
+      // Find the model with the highest token usage (main conversation model)
+      let contextWindow: number | undefined
+      if (modelUsage) {
+        let maxTokens = 0
+        for (const [, modelData] of Object.entries(modelUsage)) {
+          const totalTokens = (modelData as Record<string, number>).inputTokens || 0
+          if (totalTokens > maxTokens && modelData.contextWindow) {
+            maxTokens = totalTokens
+            contextWindow = modelData.contextWindow
+          }
+        }
+      }
+
       const resultStoredMessage: ConversationMessage = {
         uuid: uuidv4(),
         type: 'system',
@@ -530,7 +563,14 @@ export async function sendMessageSDK(
         sessionId: resultMessage.session_id,
         claudeMessage: resultMessage,
         costUsd: resultMessage.total_cost_usd,
-        durationMs: resultMessage.duration_ms
+        durationMs: resultMessage.duration_ms,
+        numTurns: resultMessage.num_turns,
+        // Store cumulative token usage from result message
+        inputTokens: usage?.input_tokens,
+        outputTokens: usage?.output_tokens,
+        cacheReadTokens: usage?.cache_read_input_tokens,
+        cacheCreationTokens: usage?.cache_creation_input_tokens,
+        contextWindow
       }
       appendMessage(conversationId, resultStoredMessage)
     }
