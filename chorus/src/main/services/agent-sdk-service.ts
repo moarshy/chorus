@@ -573,6 +573,13 @@ export async function sendMessageSDK(
         contextWindow
       }
       appendMessage(conversationId, resultStoredMessage)
+
+      // Send result message to renderer for context metrics display
+      mainWindow.webContents.send('agent:message', {
+        conversationId,
+        agentId,
+        message: resultStoredMessage
+      })
     }
   } catch (error) {
     // Handle interruption
