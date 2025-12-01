@@ -93,6 +93,7 @@ interface ClaudeResultMessage {
   num_turns?: number
   duration_ms?: number
   total_cost_usd?: number
+  usage?: UsageData
 }
 
 // ============================================
@@ -148,20 +149,32 @@ function extractContextFromLastMessage(messages: ConversationMessage[]): Context
 }
 
 /**
- * Extract session stats (cost, turns, duration) from result message.
+ * Extract session stats (cost, turns, duration, output tokens) from result message.
  * These are cumulative stats for billing/analytics, not context calculation.
+ *
+ * NOTE: Output tokens must come from the result message, not assistant messages.
+ * Assistant message usage may show partial/streaming counts that don't reflect
+ * the actual total output tokens generated.
  */
-function extractSessionStats(messages: ConversationMessage[]): { totalCost: number; numTurns: number; durationMs: number } {
+function extractSessionStats(messages: ConversationMessage[]): {
+  totalCost: number
+  numTurns: number
+  durationMs: number
+  outputTokens: number
+} {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]
     if (m.type !== 'system') continue
 
     // Check top-level fields first (new format)
     if (m.costUsd !== undefined || m.numTurns !== undefined) {
+      // Get output tokens from claudeMessage.usage (result message)
+      const claudeMsg = m.claudeMessage as ClaudeResultMessage | undefined
       return {
         totalCost: m.costUsd || 0,
         numTurns: m.numTurns || 0,
-        durationMs: m.durationMs || 0
+        durationMs: m.durationMs || 0,
+        outputTokens: claudeMsg?.usage?.output_tokens || m.outputTokens || 0
       }
     }
 
@@ -171,32 +184,38 @@ function extractSessionStats(messages: ConversationMessage[]): { totalCost: numb
       return {
         totalCost: claudeMsg.total_cost_usd || 0,
         numTurns: claudeMsg.num_turns || 0,
-        durationMs: claudeMsg.duration_ms || 0
+        durationMs: claudeMsg.duration_ms || 0,
+        outputTokens: claudeMsg.usage?.output_tokens || 0
       }
     }
   }
 
-  return { totalCost: 0, numTurns: 0, durationMs: 0 }
+  return { totalCost: 0, numTurns: 0, durationMs: 0, outputTokens: 0 }
 }
 
 /**
  * Calculate context metrics from conversation messages.
  *
- * IMPORTANT: Context usage comes from the LAST assistant/tool_use message,
- * not from the result message. The result message contains CUMULATIVE billing
+ * IMPORTANT: Context usage (input tokens, cache) comes from the LAST assistant/tool_use
+ * message, not from the result message. The result message contains CUMULATIVE billing
  * tokens across all turns, which can exceed the context limit. The per-message
  * usage shows the actual context window state for that turn.
+ *
+ * However, OUTPUT tokens must come from the result message, as assistant message
+ * usage may show partial/streaming counts that don't reflect actual totals.
  */
 export function calculateContextMetrics(messages: ConversationMessage[]): ContextMetrics {
   // Get current context usage from last assistant/tool_use message
   const contextMetrics = extractContextFromLastMessage(messages)
 
-  // Get session stats from result message (for cost/turns/duration)
+  // Get session stats from result message (for cost/turns/duration/output tokens)
   const sessionStats = extractSessionStats(messages)
 
   if (contextMetrics) {
     return {
       ...contextMetrics,
+      // Output tokens from result message (not assistant message)
+      outputTokens: sessionStats.outputTokens || contextMetrics.outputTokens,
       totalCost: sessionStats.totalCost,
       numTurns: sessionStats.numTurns,
       durationMs: sessionStats.durationMs
