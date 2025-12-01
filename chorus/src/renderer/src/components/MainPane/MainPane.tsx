@@ -149,12 +149,19 @@ export function MainPane() {
       )
     }
 
+    if (tab.type === 'workspace' && tab.workspaceId) {
+      const workspace = workspaces.find(w => w.id === tab.workspaceId)
+      if (workspace) {
+        return <WorkspaceOverview workspace={workspace} />
+      }
+    }
+
     if (tab.type === 'file' && tab.filePath) {
       return <FileViewer filePath={tab.filePath} />
     }
 
     return <EmptyPanePlaceholder />
-  }, [tabs])
+  }, [tabs, workspaces])
 
   // Determine what to show based on active tab or selection state
   const renderContent = () => {
@@ -196,6 +203,14 @@ export function MainPane() {
           workspaceId={activeTab.workspaceId}
         />
       )
+    }
+
+    // If there's an active workspace tab, show workspace overview
+    if (activeTab?.type === 'workspace' && activeTab.workspaceId) {
+      const workspace = workspaces.find(w => w.id === activeTab.workspaceId)
+      if (workspace) {
+        return <WorkspaceOverview workspace={workspace} />
+      }
     }
 
     // If there's an active file tab, show file viewer

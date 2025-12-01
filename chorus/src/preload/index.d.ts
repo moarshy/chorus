@@ -36,7 +36,7 @@ interface Workspace {
 // Tab type for persistence
 interface Tab {
   id: string
-  type: 'chat' | 'file'
+  type: 'chat' | 'file' | 'workspace'
   workspaceId?: string
   agentId?: string
   conversationId?: string  // For chat tabs

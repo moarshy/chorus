@@ -259,11 +259,59 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   // Selection actions
   selectWorkspace: (id: string | null) => {
-    set({
-      selectedWorkspaceId: id,
-      selectedAgentId: null,
-      selectedFilePath: null
-    })
+    if (!id) {
+      set({
+        selectedWorkspaceId: null,
+        selectedAgentId: null,
+        selectedFilePath: null
+      })
+      return
+    }
+
+    const { tabs, openTab, workspaces, splitPaneEnabled, firstPaneGroup, secondPaneGroup } = get()
+    const workspace = workspaces.find(w => w.id === id)
+    const workspaceName = workspace?.name || 'Workspace'
+
+    // Check if workspace tab already exists
+    const existingTab = tabs.find(t => t.type === 'workspace' && t.workspaceId === id)
+    if (existingTab) {
+      set({
+        selectedWorkspaceId: id,
+        selectedAgentId: null,
+        selectedFilePath: null,
+        selectedConversationId: null,
+        activeTabId: existingTab.id
+      })
+
+      // If split mode, also activate in the correct pane group
+      if (splitPaneEnabled) {
+        if (firstPaneGroup.tabIds.includes(existingTab.id)) {
+          set({
+            firstPaneGroup: { ...firstPaneGroup, activeTabId: existingTab.id },
+            activePaneId: 'first'
+          })
+        } else if (secondPaneGroup.tabIds.includes(existingTab.id)) {
+          set({
+            secondPaneGroup: { ...secondPaneGroup, activeTabId: existingTab.id },
+            activePaneId: 'second'
+          })
+        }
+      }
+    } else {
+      // Create new workspace tab
+      const tabId = openTab({
+        type: 'workspace',
+        workspaceId: id,
+        title: workspaceName
+      })
+      set({
+        selectedWorkspaceId: id,
+        selectedAgentId: null,
+        selectedFilePath: null,
+        selectedConversationId: null,
+        activeTabId: tabId
+      })
+    }
   },
 
   selectAgent: (agentId: string | null, workspaceId?: string) => {
@@ -512,7 +560,16 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         selectedWorkspaceId: tab.workspaceId || get().selectedWorkspaceId,
         selectedFilePath: null
       })
+    } else if (tab.type === 'workspace') {
+      set({
+        activeTabId: tabId,
+        selectedWorkspaceId: tab.workspaceId || null,
+        selectedAgentId: null,
+        selectedFilePath: null,
+        selectedConversationId: null
+      })
     } else {
+      // file tab
       set({
         activeTabId: tabId,
         selectedFilePath: tab.filePath || null,
@@ -545,7 +602,15 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
                 selectedWorkspaceId: activeTab.workspaceId || null,
                 selectedFilePath: null
               })
+            } else if (activeTab.type === 'workspace') {
+              set({
+                selectedWorkspaceId: activeTab.workspaceId || null,
+                selectedAgentId: null,
+                selectedFilePath: null,
+                selectedConversationId: null
+              })
             } else {
+              // file tab
               set({
                 selectedFilePath: activeTab.filePath || null,
                 selectedWorkspaceId: activeTab.workspaceId || null,
