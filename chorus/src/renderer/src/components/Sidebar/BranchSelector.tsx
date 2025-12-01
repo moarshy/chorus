@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useFileTreeStore } from '../../stores/file-tree-store'
 
 interface GitBranch {
   name: string

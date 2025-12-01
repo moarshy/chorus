@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { GitBranch, GitCommit } from '../../types'
+import { useFileTreeStore } from '../../stores/file-tree-store'
 
 interface BranchCommitsGridProps {
   workspacePath: string
@@ -50,6 +51,12 @@ const CommitIcon = () => (
   </svg>
 )
 
+const TrashIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M6.5 1.75a.25.25 0 01.25-.25h2.5a.25.25 0 01.25.25V3h-3V1.75zm4.5 0V3h2.25a.75.75 0 010 1.5H2.75a.75.75 0 010-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75zM4.496 6.675a.75.75 0 10-1.492.15l.66 6.6A1.75 1.75 0 005.405 15h5.19c.9 0 1.652-.681 1.741-1.576l.66-6.6a.75.75 0 00-1.492-.149l-.66 6.6a.25.25 0 01-.249.225h-5.19a.25.25 0 01-.249-.225l-.66-6.6z" />
+  </svg>
+)
+
 const BRANCHES_PER_PAGE = 5
 const COMMITS_PER_BRANCH = 10
 
@@ -94,10 +101,16 @@ interface BranchColumnProps {
   isLoading: boolean
   isCheckingOut: boolean
   onCheckout: () => void
+  onDelete: () => void
 }
 
-function BranchColumn({ branch, commits, isLoading, isCheckingOut, onCheckout }: BranchColumnProps) {
+function BranchColumn({ branch, commits, isLoading, isCheckingOut, onCheckout, onDelete }: BranchColumnProps) {
   const displayName = getDisplayName(branch)
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onDelete()
+  }
 
   return (
     <div
@@ -115,7 +128,7 @@ function BranchColumn({ branch, commits, isLoading, isCheckingOut, onCheckout }:
       <div
         onClick={branch.isCurrent ? undefined : onCheckout}
         className={`
-          p-3 border-b border-default
+          p-3 border-b border-default group
           ${branch.isCurrent
             ? 'cursor-default'
             : 'cursor-pointer hover:bg-hover'
@@ -131,13 +144,23 @@ function BranchColumn({ branch, commits, isLoading, isCheckingOut, onCheckout }:
               <GitBranchIcon />
             </span>
           )}
-          <span className="font-medium truncate text-sm" title={branch.name}>
+          <span className="font-medium truncate text-sm flex-1" title={branch.name}>
             {displayName}
           </span>
           {branch.isCurrent && (
             <span className="text-accent flex-shrink-0">
               <CheckIcon />
             </span>
+          )}
+          {/* Delete button - only for non-current branches */}
+          {!branch.isCurrent && (
+            <button
+              onClick={handleDeleteClick}
+              className="p-1 text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              title="Delete branch"
+            >
+              <TrashIcon />
+            </button>
           )}
         </div>
         {branch.isRemote && !branch.isCurrent && (
@@ -189,6 +212,9 @@ export function BranchCommitsGrid({ workspacePath, onBranchChange, localOnly = f
   const [isLoadingBranches, setIsLoadingBranches] = useState(true)
   const [isCheckingOut, setIsCheckingOut] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ branchName: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const triggerFileTreeRefresh = useFileTreeStore((state) => state.triggerRefresh)
 
   // Sort branches: current first, then local, then remote (excluding duplicates)
   const sortedBranches = useCallback(() => {
@@ -307,6 +333,7 @@ export function BranchCommitsGrid({ workspacePath, onBranchChange, localOnly = f
       const result = await window.api.git.checkout(workspacePath, branch.name)
       if (result.success) {
         onBranchChange()
+        triggerFileTreeRefresh() // Refresh file tree since files changed on disk
         // Reload branches to update current status
         const branchResult = await window.api.git.listBranches(workspacePath)
         if (branchResult.success && branchResult.data) {
@@ -328,6 +355,41 @@ export function BranchCommitsGrid({ workspacePath, onBranchChange, localOnly = f
 
   const handleNextPage = () => {
     setPageIndex(prev => Math.min(totalPages - 1, prev + 1))
+  }
+
+  const handleDelete = (branch: GitBranch) => {
+    if (branch.isCurrent) return
+    setDeleteConfirm({ branchName: branch.name })
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return
+
+    setIsDeleting(true)
+    try {
+      const result = await window.api.git.deleteBranch(workspacePath, deleteConfirm.branchName, true)
+      if (result.success) {
+        // Reload branches
+        const branchResult = await window.api.git.listBranches(workspacePath)
+        if (branchResult.success && branchResult.data) {
+          setBranches(branchResult.data)
+          // Clear commits cache for deleted branch
+          setBranchCommits(prev => {
+            const next = new Map(prev)
+            next.delete(deleteConfirm.branchName)
+            return next
+          })
+        }
+        onBranchChange()
+      } else {
+        setError(result.error || 'Failed to delete branch')
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setIsDeleting(false)
+      setDeleteConfirm(null)
+    }
   }
 
   if (isLoadingBranches) {
@@ -391,6 +453,7 @@ export function BranchCommitsGrid({ workspacePath, onBranchChange, localOnly = f
             isLoading={loadingBranches.has(branch.name)}
             isCheckingOut={isCheckingOut === branch.name}
             onCheckout={() => handleCheckout(branch)}
+            onDelete={() => handleDelete(branch)}
           />
         ))}
         {/* Fill empty slots if fewer than 5 branches */}
@@ -400,6 +463,38 @@ export function BranchCommitsGrid({ workspacePath, onBranchChange, localOnly = f
           ))
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-start justify-center pt-[15%] z-50">
+          <div className="bg-surface border border-default rounded shadow-lg w-[400px]">
+            <div className="p-4">
+              <p className="text-primary text-sm">
+                Delete branch <span className="font-mono text-secondary">{deleteConfirm.branchName}</span>?
+              </p>
+            </div>
+            <div className="px-4 pb-3 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-3 py-1.5 text-sm rounded border border-default hover:bg-hover text-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className={`px-3 py-1.5 text-sm rounded transition-colors ${
+                  isDeleting
+                    ? 'bg-red-600/50 text-white/50 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700 text-white'
+                }`}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -445,25 +445,21 @@ function ContextMenu({ state, onClose, onNewFile, onNewFolder, onRename, onDelet
       className="fixed z-50 bg-main border border-default rounded-lg shadow-xl py-1 min-w-44 overflow-hidden"
       style={{ left: state.x, top: state.y }}
     >
-      {isFolder && (
-        <>
-          <button
-            onClick={onNewFile}
-            className="w-full px-3 py-2 text-left text-sm text-secondary hover:bg-hover hover:text-primary flex items-center gap-2"
-          >
-            <NewFileIcon />
-            New File
-          </button>
-          <button
-            onClick={onNewFolder}
-            className="w-full px-3 py-2 text-left text-sm text-secondary hover:bg-hover hover:text-primary flex items-center gap-2"
-          >
-            <NewFolderIcon />
-            New Folder
-          </button>
-          <div className="h-px bg-border-default my-1" />
-        </>
-      )}
+      <button
+        onClick={onNewFile}
+        className="w-full px-3 py-2 text-left text-sm text-secondary hover:bg-hover hover:text-primary flex items-center gap-2"
+      >
+        <NewFileIcon />
+        New File
+      </button>
+      <button
+        onClick={onNewFolder}
+        className="w-full px-3 py-2 text-left text-sm text-secondary hover:bg-hover hover:text-primary flex items-center gap-2"
+      >
+        <NewFolderIcon />
+        New Folder
+      </button>
+      <div className="h-px bg-border-default my-1" />
       <button
         onClick={onRename}
         className="w-full px-3 py-2 text-left text-sm text-secondary hover:bg-hover hover:text-primary flex items-center gap-2"

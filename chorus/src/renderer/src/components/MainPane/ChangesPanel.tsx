@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { GitStatus, GitChange } from '../../types'
+import { useFileTreeStore } from '../../stores/file-tree-store'
 
 interface ChangesPanelProps {
   workspacePath: string
@@ -78,6 +79,7 @@ export function ChangesPanel({ workspacePath }: ChangesPanelProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [discardConfirm, setDiscardConfirm] = useState<DiscardConfirmState | null>(null)
   const [actionInProgress, setActionInProgress] = useState<string | null>(null)
+  const triggerFileTreeRefresh = useFileTreeStore((state) => state.triggerRefresh)
 
   const loadStatus = async () => {
     const result = await window.api.git.status(workspacePath)
@@ -102,7 +104,8 @@ export function ChangesPanel({ workspacePath }: ChangesPanelProps) {
     try {
       const result = await window.api.git.discardChanges(workspacePath, discardConfirm.file)
       if (result.success) {
-        await loadStatus() // Refresh the list
+        await loadStatus() // Refresh the git status list
+        triggerFileTreeRefresh() // Refresh file tree since files changed on disk
       } else {
         console.error('Failed to discard:', result.error)
       }
