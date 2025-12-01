@@ -64,7 +64,7 @@ chorus/
 
 **Component Structure**: Components use inline SVG icons. No icon library.
 
-**Claude Agent SDK Integration**: Agents communicate via `@anthropic-ai/claude-agent-sdk` using the `query()` function directly (no CLI spawning). The SDK provides streaming messages, session management via `options.resume`, permission handling via `canUseTool` callback, and file change notifications via `PostToolUse` hooks. Messages are stored in JSONL format at `~/.chorus/sessions/{workspaceId}/{agentId}/`. See `docs/3-tools/claude-code/message-format.md` for the message format spec and `specifications/5-migrate-to-cc-agent-sdk/` for migration details.
+**Claude Agent SDK Integration**: Agents communicate via `@anthropic-ai/claude-agent-sdk` using the `query()` function directly (no CLI spawning). The SDK provides streaming messages, session management via `options.resume`, permission handling via `canUseTool` callback, and file change notifications via `PostToolUse` hooks. Messages are stored in JSONL format at `~/.chorus/sessions/{workspaceId}/{agentId}/`. See `docs/3-tools/claude-agent-sdk/` for comprehensive SDK documentation.
 
 **Conversation Storage**: Each conversation has an index entry in `conversations.json` and messages in `{conversationId}-messages.jsonl`. Raw Claude Code messages are preserved in the `claudeMessage` field for session resumption.
 
@@ -80,7 +80,7 @@ chorus/
 
 **Workspace Default Settings**: Each workspace can have default settings stored in the central `.chorus/config.json` (under each workspace's `settings` field) that apply to new conversations. The settings hierarchy is: Global defaults → Workspace defaults → Per-conversation overrides. The `WorkspaceSettings` component in the Workspace Overview page allows users to configure defaults for permission mode, allowed tools, and model selection.
 
-**Session Resumption**: Conversations use the SDK's `options.resume` with session ID to continue sessions. The sessionId is captured from the `system.init` message and stored in the conversation's `sessionId` field. The `sessionCreatedAt` timestamp tracks when the session was created for expiry detection (sessions expire after ~25 days). CRITICAL: The renderer must sync sessionId from backend after first message - this is done via the `agent:session-update` IPC event. See `docs/3-tools/claude-code/session-management.md` for detailed documentation.
+**Session Resumption**: Conversations use the SDK's `options.resume` with session ID to continue sessions. The sessionId is captured from the `system.init` message and stored in the conversation's `sessionId` field. The `sessionCreatedAt` timestamp tracks when the session was created for expiry detection (sessions expire after ~25 days). CRITICAL: The renderer must sync sessionId from backend after first message - this is done via the `agent:session-update` IPC event. See `docs/3-tools/claude-agent-sdk/3-sessions.md` for detailed documentation.
 
 **Workspace Isolation**: Each agent runs in its workspace directory (the cloned repo path), NOT the parent Chorus directory. For example, if `mcplatform` repo is added to Chorus at `cc-slack/mcplatform`, Claude Code sessions run with `cwd: cc-slack/mcplatform`. The agent should NOT have access to `cc-slack/` parent. This is enforced in `agent-sdk-service.ts` via the `cwd: repoPath` option.
 
@@ -119,6 +119,5 @@ bun run typecheck  # Type check all code
 - `chorus/src/renderer/src/components/MainPane/WorkspaceSettings.tsx` - Workspace settings UI in overview
 - `chorus/src/renderer/src/components/dialogs/PermissionDialog.tsx` - SDK permission request dialog
 - `chorus/src/renderer/src/components/Chat/ConversationDetails.tsx` - Details panel with files, todos, tool calls, metrics
-- `docs/3-tools/claude-code/message-format.md` - Claude Code stream-json format documentation
-- `docs/3-tools/claude-code/session-management.md` - Session resumption best practices and known issues
+- `docs/3-tools/claude-agent-sdk/` - Claude Agent SDK documentation (message types, sessions, permissions, hooks, etc.)
 - `specifications/5-migrate-to-cc-agent-sdk/feature.md` - SDK migration requirements and known limitations
