@@ -31,7 +31,29 @@ import {
   executeCommand
 } from './services/slash-command-service'
 import { listDirectory, readFile, writeFile, walkDirectory } from './services/fs-service'
-import { isRepo, getStatus, getBranch, getLog, getLogForBranch, clone, cancelClone, listBranches, checkout } from './services/git-service'
+import {
+  isRepo,
+  getStatus,
+  getBranch,
+  getLog,
+  getLogForBranch,
+  clone,
+  cancelClone,
+  listBranches,
+  checkout,
+  createBranch,
+  stageAll,
+  commit,
+  getStructuredDiff,
+  getStructuredDiffBetweenBranches,
+  merge,
+  deleteBranch,
+  branchExists,
+  getAgentBranches,
+  stash,
+  stashPop,
+  push
+} from './services/git-service'
 import {
   listConversations,
   createConversation,
@@ -381,6 +403,117 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:create-branch', async (_event, path: string, branchName: string) => {
+    try {
+      await createBranch(path, branchName)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:commit', async (_event, path: string, message: string) => {
+    try {
+      await stageAll(path)
+      const hash = await commit(path, message)
+      return { success: true, data: hash }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:get-diff', async (_event, path: string, commitHash?: string) => {
+    try {
+      const diff = await getStructuredDiff(path, commitHash)
+      return { success: true, data: diff }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    'git:get-diff-between-branches',
+    async (_event, path: string, baseBranch: string, targetBranch: string) => {
+      try {
+        const diff = await getStructuredDiffBetweenBranches(path, baseBranch, targetBranch)
+        return { success: true, data: diff }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle('git:merge', async (_event, path: string, sourceBranch: string, options?: { squash?: boolean }) => {
+    try {
+      await merge(path, sourceBranch, options)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:delete-branch', async (_event, path: string, branchName: string, force?: boolean) => {
+    try {
+      await deleteBranch(path, branchName, force)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:branch-exists', async (_event, path: string, branchName: string) => {
+    try {
+      const exists = await branchExists(path, branchName)
+      return { success: true, data: exists }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:get-agent-branches', async (_event, path: string) => {
+    try {
+      const branches = await getAgentBranches(path)
+      return { success: true, data: branches }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:stash', async (_event, path: string, message?: string) => {
+    try {
+      await stash(path, message)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:stash-pop', async (_event, path: string) => {
+    try {
+      await stashPop(path)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    'git:push',
+    async (
+      _event,
+      path: string,
+      branchName?: string,
+      options?: { setUpstream?: boolean; force?: boolean }
+    ) => {
+      try {
+        await push(path, branchName, options)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
   // ============================================
   // CONVERSATION IPC HANDLERS
   // ============================================
@@ -466,6 +599,10 @@ app.whenReady().then(() => {
         const sessionId = data?.conversation?.sessionId || null
         const sessionCreatedAt = data?.conversation?.sessionCreatedAt || null
         const settings = data?.conversation?.settings
+        const workspaceId = data?.conversation?.workspaceId
+
+        // Get workspace git settings if workspaceId is available
+        const gitSettings = workspaceId ? getWorkspaceSettings(workspaceId).git : undefined
 
         // Fire and forget - response comes via events
         sendMessage(
@@ -477,7 +614,8 @@ app.whenReady().then(() => {
           sessionCreatedAt,
           agentFilePath || null,
           mainWindow,
-          settings
+          settings,
+          gitSettings
         )
         return { success: true }
       } catch (error) {

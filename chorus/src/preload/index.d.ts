@@ -357,6 +357,51 @@ interface CloneResult {
   error?: string
 }
 
+// Diff hunk structure
+interface DiffHunk {
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  content: string
+}
+
+// File diff structure
+interface FileDiff {
+  filePath: string
+  status: 'added' | 'modified' | 'deleted' | 'renamed'
+  additions: number
+  deletions: number
+  hunks: DiffHunk[]
+}
+
+// Agent branch info for automated git operations
+interface AgentBranchInfo {
+  name: string
+  agentName: string
+  sessionId: string
+  lastCommitDate: string
+  commitCount: number
+  isCurrent: boolean
+}
+
+// Git branch created event (from auto-branch)
+interface GitBranchCreatedEvent {
+  conversationId: string
+  branchName: string
+  agentName: string
+}
+
+// Git commit created event (from auto-commit)
+interface GitCommitCreatedEvent {
+  conversationId: string
+  branchName: string
+  commitHash: string
+  message: string
+  files: string[]
+  type: 'turn' | 'stop'
+}
+
 // ============================================
 // Conversation Settings Types
 // ============================================
@@ -374,11 +419,18 @@ interface ConversationSettings {
 // Tools always available (no permissions needed)
 // const ALWAYS_AVAILABLE = ['Read', 'Glob', 'Grep', 'Task', 'TodoWrite', 'AskUserQuestion']
 
+// Git automation settings
+interface GitSettings {
+  autoBranch: boolean      // Create branch per agent session
+  autoCommit: boolean      // Commit per turn
+}
+
 // Workspace-level default settings
 interface WorkspaceSettings {
   defaultPermissionMode: PermissionMode
   defaultAllowedTools: string[]
   defaultModel: string
+  git?: GitSettings
 }
 
 // Slash command from .claude/commands/*.md files
@@ -437,8 +489,27 @@ interface GitAPI {
   logForBranch: (path: string, branch: string, count?: number) => Promise<ApiResult<GitCommit[]>>
   clone: (url: string, targetDir: string) => Promise<ApiResult>
   cancelClone: () => Promise<ApiResult>
+
+  // New automated git operations
+  createBranch: (path: string, branchName: string) => Promise<ApiResult>
+  commit: (path: string, message: string) => Promise<ApiResult<string>>
+  getDiff: (path: string, commitHash?: string) => Promise<ApiResult<FileDiff[]>>
+  getDiffBetweenBranches: (path: string, baseBranch: string, targetBranch: string) => Promise<ApiResult<FileDiff[]>>
+  merge: (path: string, sourceBranch: string, options?: { squash?: boolean }) => Promise<ApiResult>
+  deleteBranch: (path: string, branchName: string, force?: boolean) => Promise<ApiResult>
+  branchExists: (path: string, branchName: string) => Promise<ApiResult<boolean>>
+  getAgentBranches: (path: string) => Promise<ApiResult<AgentBranchInfo[]>>
+  stash: (path: string, message?: string) => Promise<ApiResult>
+  stashPop: (path: string) => Promise<ApiResult>
+  push: (path: string, branchName?: string, options?: { setUpstream?: boolean; force?: boolean }) => Promise<ApiResult>
+
+  // Clone progress events
   onCloneProgress: (callback: (progress: CloneProgress) => void) => () => void
   onCloneComplete: (callback: (result: CloneResult) => void) => () => void
+
+  // Git commit events (from agent auto-commits)
+  onBranchCreated: (callback: (event: GitBranchCreatedEvent) => void) => () => void
+  onCommitCreated: (callback: (event: GitCommitCreatedEvent) => void) => () => void
 }
 
 interface ConversationAPI {
@@ -519,6 +590,12 @@ export type {
   GitBranch,
   CloneProgress,
   CloneResult,
+  // New git types for automated operations
+  DiffHunk,
+  FileDiff,
+  AgentBranchInfo,
+  GitBranchCreatedEvent,
+  GitCommitCreatedEvent,
   ApiResult,
   ContentBlock,
   ConversationMessage,
@@ -551,6 +628,7 @@ export type {
   PermissionMode,
   ConversationSettings,
   WorkspaceSettings,
+  GitSettings,
   // Slash command types
   SlashCommand
 }

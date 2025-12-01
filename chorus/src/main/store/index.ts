@@ -12,10 +12,17 @@ export interface Agent {
   isGeneral?: boolean  // True for auto-created Chorus agent
 }
 
+// Git automation settings
+export interface GitSettings {
+  autoBranch: boolean      // Create branch per agent session (default: true)
+  autoCommit: boolean      // Commit per turn (default: true)
+}
+
 export interface WorkspaceSettings {
   defaultPermissionMode: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
   defaultAllowedTools: string[]
   defaultModel: string
+  git?: GitSettings        // Git automation settings
 }
 
 export interface Workspace {
@@ -286,10 +293,16 @@ export function toggleWorkspaceExpanded(id: string): void {
 // WORKSPACE SETTINGS OPERATIONS
 // ============================================
 
+export const DEFAULT_GIT_SETTINGS: GitSettings = {
+  autoBranch: true,
+  autoCommit: true
+}
+
 const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
   defaultPermissionMode: 'default',
   defaultAllowedTools: [],
-  defaultModel: 'default'
+  defaultModel: 'default',
+  git: DEFAULT_GIT_SETTINGS
 }
 
 export function getWorkspaceSettings(workspaceId: string): WorkspaceSettings {

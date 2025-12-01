@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { ConversationSettings } from './conversation-service'
+import { GitSettings } from '../store'
 import {
   sendMessageSDK,
   stopAgentSDK,
@@ -27,7 +28,8 @@ export async function sendMessage(
   sessionCreatedAt: string | null,
   agentFilePath: string | null,
   mainWindow: BrowserWindow,
-  settings?: ConversationSettings
+  settings?: ConversationSettings,
+  gitSettings?: GitSettings
 ): Promise<void> {
   return sendMessageSDK(
     conversationId,
@@ -38,7 +40,8 @@ export async function sendMessage(
     sessionCreatedAt,
     agentFilePath,
     mainWindow,
-    settings
+    settings,
+    gitSettings
   )
 }
 

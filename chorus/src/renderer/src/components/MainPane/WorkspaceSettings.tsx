@@ -1,11 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
-import type { PermissionMode, WorkspaceSettings as WorkspaceSettingsType } from '../../types'
+import type { PermissionMode, WorkspaceSettings as WorkspaceSettingsType, GitSettings } from '../../types'
+
+// Default git settings
+const DEFAULT_GIT_SETTINGS: GitSettings = {
+  autoBranch: true,
+  autoCommit: true
+}
 
 // Default settings
 const DEFAULT_SETTINGS: WorkspaceSettingsType = {
   defaultPermissionMode: 'default',
   defaultAllowedTools: [],
-  defaultModel: 'default'
+  defaultModel: 'default',
+  git: DEFAULT_GIT_SETTINGS
 }
 
 // Available models (using aliases that resolve to latest versions)
@@ -51,6 +58,12 @@ const ChevronDownIcon = () => (
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
     <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+  </svg>
+)
+
+const GitBranchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5z" />
   </svg>
 )
 
@@ -148,6 +161,16 @@ export function WorkspaceSettings({ workspaceId }: WorkspaceSettingsProps) {
       ? currentTools.filter(t => t !== toolId)
       : [...currentTools, toolId]
     updateSettings({ defaultAllowedTools: newTools })
+  }
+
+  const handleGitSettingToggle = (key: keyof GitSettings) => {
+    const currentGit = settings.git || DEFAULT_GIT_SETTINGS
+    updateSettings({
+      git: {
+        ...currentGit,
+        [key]: !currentGit[key]
+      }
+    })
   }
 
   const selectedModel = MODELS.find(m => m.id === settings.defaultModel) || MODELS[0]
@@ -256,6 +279,53 @@ export function WorkspaceSettings({ workspaceId }: WorkspaceSettingsProps) {
               </div>
             </div>
           </Dropdown>
+        </div>
+
+        {/* Git Automation Settings */}
+        <div className="mt-6 pt-6 border-t border-default">
+          <h3 className="text-sm font-semibold text-secondary flex items-center gap-2 mb-3">
+            <GitBranchIcon />
+            Git Automation
+          </h3>
+          <div className="space-y-3">
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <button
+                onClick={() => handleGitSettingToggle('autoBranch')}
+                className={`mt-0.5 w-5 h-5 flex-shrink-0 flex items-center justify-center rounded border transition-colors ${
+                  (settings.git?.autoBranch ?? DEFAULT_GIT_SETTINGS.autoBranch)
+                    ? 'bg-accent border-accent text-white'
+                    : 'border-default group-hover:border-secondary'
+                }`}
+              >
+                {(settings.git?.autoBranch ?? DEFAULT_GIT_SETTINGS.autoBranch) && <CheckIcon />}
+              </button>
+              <div>
+                <p className="text-primary text-sm font-medium">Auto-create branch for each agent session</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Creates <code className="text-accent">agent/{'{agentName}'}/{'{sessionId}'}</code> branches to isolate agent work
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <button
+                onClick={() => handleGitSettingToggle('autoCommit')}
+                className={`mt-0.5 w-5 h-5 flex-shrink-0 flex items-center justify-center rounded border transition-colors ${
+                  (settings.git?.autoCommit ?? DEFAULT_GIT_SETTINGS.autoCommit)
+                    ? 'bg-accent border-accent text-white'
+                    : 'border-default group-hover:border-secondary'
+                }`}
+              >
+                {(settings.git?.autoCommit ?? DEFAULT_GIT_SETTINGS.autoCommit) && <CheckIcon />}
+              </button>
+              <div>
+                <p className="text-primary text-sm font-medium">Auto-commit after each conversation turn</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Automatically commits file changes with the prompt as the commit message
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
     </div>

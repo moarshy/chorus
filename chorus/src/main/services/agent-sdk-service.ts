@@ -17,6 +17,8 @@ import {
   ToolUseBlock,
   ToolResultBlock
 } from './conversation-service'
+import { GitSettings, DEFAULT_GIT_SETTINGS } from '../store'
+import * as gitService from './git-service'
 
 // ============================================
 // Active Streams Management
@@ -79,6 +81,278 @@ function cancelPendingPermissions(conversationId: string): void {
 }
 
 // ============================================
+// Automated Git Operations
+// ============================================
+
+// Track which conversations have agent branches
+const conversationBranches: Map<string, string> = new Map()
+
+// Track files changed per turn (for commit-per-turn)
+const turnFileChanges: Map<string, Set<string>> = new Map()
+
+// Track user prompts for commit message generation
+const sessionPrompts: Map<string, string[]> = new Map()
+
+// Track original branch to restore after merge
+const originalBranches: Map<string, string> = new Map()
+
+/**
+ * Generate branch name for agent session
+ */
+function generateAgentBranchName(agentName: string, sessionId: string): string {
+  const sanitizedAgentName = agentName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+  const shortSessionId = sessionId.slice(0, 7)
+  return `agent/${sanitizedAgentName}/${shortSessionId}`
+}
+
+/**
+ * Ensure agent branch exists and is checked out
+ */
+async function ensureAgentBranch(
+  conversationId: string,
+  sessionId: string,
+  agentName: string,
+  repoPath: string,
+  mainWindow: BrowserWindow,
+  gitSettings: GitSettings
+): Promise<string | null> {
+  // Check if we already have a branch for this conversation
+  if (conversationBranches.has(conversationId)) {
+    return conversationBranches.get(conversationId)!
+  }
+
+  // Check git settings for auto-branch enabled
+  if (!gitSettings.autoBranch) {
+    console.log('[SDK] Auto-branch disabled in settings')
+    return null
+  }
+
+  // Check if this is a git repo
+  const isRepo = await gitService.isRepo(repoPath)
+  if (!isRepo) {
+    console.log('[SDK] Not a git repo, skipping auto-branch')
+    return null
+  }
+
+  const branchName = generateAgentBranchName(agentName, sessionId)
+
+  try {
+    // Save original branch for later restoration
+    const currentBranch = await gitService.getBranch(repoPath)
+    if (currentBranch) {
+      originalBranches.set(conversationId, currentBranch)
+    }
+
+    // Check for uncommitted changes
+    const status = await gitService.getStatus(repoPath)
+    if (status.isDirty) {
+      // Stash changes before branching
+      await gitService.stash(repoPath, `Pre-agent stash for ${branchName}`)
+      console.log('[SDK] Stashed uncommitted changes')
+    }
+
+    // Check if branch already exists
+    const exists = await gitService.branchExists(repoPath, branchName)
+    if (exists) {
+      await gitService.checkout(repoPath, branchName)
+      console.log(`[SDK] Checked out existing agent branch: ${branchName}`)
+    } else {
+      await gitService.createBranch(repoPath, branchName)
+      console.log(`[SDK] Created new agent branch: ${branchName}`)
+    }
+
+    // Pop stash if we stashed
+    if (status.isDirty) {
+      try {
+        await gitService.stashPop(repoPath)
+        console.log('[SDK] Restored stashed changes')
+      } catch (e) {
+        // Stash pop may fail if conflicts - that's okay
+        console.warn('[SDK] Could not pop stash (may have conflicts):', e)
+      }
+    }
+
+    conversationBranches.set(conversationId, branchName)
+
+    // Notify renderer
+    mainWindow.webContents.send('git:branch-created', {
+      conversationId,
+      branchName,
+      agentName
+    })
+
+    return branchName
+  } catch (error) {
+    console.error('[SDK] Failed to create agent branch:', error)
+    return null
+  }
+}
+
+/**
+ * Generate commit message for a single turn
+ */
+function generateTurnCommitMessage(userPrompt: string, files: Set<string>): string {
+  const maxPromptLength = 50
+  let summary = userPrompt.slice(0, maxPromptLength)
+  if (userPrompt.length > maxPromptLength) {
+    summary += '...'
+  }
+
+  const fileList = Array.from(files)
+    .map((f) => f.split('/').pop())
+    .join(', ')
+
+  return `[Agent] ${summary}\n\nFiles: ${fileList}`
+}
+
+/**
+ * Generate commit message for stop event
+ */
+function generateStopCommitMessage(prompts: string[], files: Set<string>): string {
+  const title = prompts[0]?.slice(0, 50) || 'Agent session'
+  const suffix = prompts[0]?.length > 50 ? '...' : ''
+
+  const fileList = Array.from(files)
+    .map((f) => `- ${f.split('/').pop()}`)
+    .join('\n')
+
+  const promptSummary =
+    prompts.length > 1
+      ? `\n\nPrompts (${prompts.length}):\n${prompts.map((p, i) => `${i + 1}. ${p.slice(0, 60)}${p.length > 60 ? '...' : ''}`).join('\n')}`
+      : ''
+
+  return `[Agent - Stopped] ${title}${suffix}\n\nFiles changed:\n${fileList}${promptSummary}`
+}
+
+/**
+ * Commit changes from a turn
+ */
+async function commitTurnChanges(
+  conversationId: string,
+  repoPath: string,
+  userPrompt: string,
+  mainWindow: BrowserWindow,
+  gitSettings: GitSettings
+): Promise<void> {
+  // Check if auto-commit is enabled
+  if (!gitSettings.autoCommit) {
+    console.log('[SDK] Auto-commit disabled in settings')
+    turnFileChanges.delete(conversationId)
+    return
+  }
+
+  const changedFiles = turnFileChanges.get(conversationId)
+  const branchName = conversationBranches.get(conversationId)
+
+  if (!changedFiles || changedFiles.size === 0 || !branchName) {
+    return
+  }
+
+  try {
+    // Check if there are actual changes to commit
+    const status = await gitService.getStatus(repoPath)
+    if (!status.isDirty) {
+      console.log('[SDK] No changes to commit')
+      turnFileChanges.delete(conversationId)
+      return
+    }
+
+    const commitMessage = generateTurnCommitMessage(userPrompt, changedFiles)
+
+    await gitService.stageAll(repoPath)
+    const commitHash = await gitService.commit(repoPath, commitMessage)
+
+    // Notify renderer
+    mainWindow.webContents.send('git:commit-created', {
+      conversationId,
+      branchName,
+      commitHash,
+      message: commitMessage,
+      files: Array.from(changedFiles),
+      type: 'turn'
+    })
+
+    console.log(`[SDK] Turn commit: ${commitHash.slice(0, 7)}`)
+  } catch (error) {
+    console.error('[SDK] Turn auto-commit failed:', error)
+  } finally {
+    // Clear tracked files for next turn
+    turnFileChanges.delete(conversationId)
+  }
+}
+
+/**
+ * Final commit on stop - catches any uncommitted changes
+ */
+async function commitOnStop(
+  conversationId: string,
+  repoPath: string,
+  mainWindow: BrowserWindow,
+  gitSettings: GitSettings
+): Promise<void> {
+  // Check if auto-commit is enabled
+  if (!gitSettings.autoCommit) {
+    console.log('[SDK] Auto-commit disabled in settings (stop)')
+    turnFileChanges.delete(conversationId)
+    sessionPrompts.delete(conversationId)
+    return
+  }
+
+  const changedFiles = turnFileChanges.get(conversationId)
+  const prompts = sessionPrompts.get(conversationId) || []
+  const branchName = conversationBranches.get(conversationId)
+
+  if (!changedFiles || changedFiles.size === 0 || !branchName) {
+    // Cleanup even if no commit needed
+    turnFileChanges.delete(conversationId)
+    sessionPrompts.delete(conversationId)
+    return
+  }
+
+  try {
+    // Check if there are actual changes to commit
+    const status = await gitService.getStatus(repoPath)
+    if (!status.isDirty) {
+      console.log('[SDK] No remaining changes to commit on stop')
+      return
+    }
+
+    const commitMessage = generateStopCommitMessage(prompts, changedFiles)
+
+    await gitService.stageAll(repoPath)
+    const commitHash = await gitService.commit(repoPath, commitMessage)
+
+    // Notify renderer
+    mainWindow.webContents.send('git:commit-created', {
+      conversationId,
+      branchName,
+      commitHash,
+      message: commitMessage,
+      files: Array.from(changedFiles),
+      type: 'stop'
+    })
+
+    console.log(`[SDK] Stop commit: ${commitHash.slice(0, 7)}`)
+  } catch (error) {
+    console.error('[SDK] Stop commit failed:', error)
+  } finally {
+    // Cleanup tracking
+    turnFileChanges.delete(conversationId)
+    sessionPrompts.delete(conversationId)
+  }
+}
+
+/**
+ * Cleanup git tracking for a conversation
+ */
+function cleanupGitTracking(conversationId: string): void {
+  turnFileChanges.delete(conversationId)
+  sessionPrompts.delete(conversationId)
+  // Note: Don't delete conversationBranches - we want to keep the branch association
+  // for future messages in the same conversation
+}
+
+// ============================================
 // SDK Message Processing
 // ============================================
 
@@ -94,7 +368,8 @@ export async function sendMessageSDK(
   sessionCreatedAt: string | null,
   agentFilePath: string | null,
   mainWindow: BrowserWindow,
-  settings?: ConversationSettings
+  settings?: ConversationSettings,
+  gitSettings?: GitSettings
 ): Promise<void> {
   // Stop any existing stream for this conversation
   await stopAgentSDK(conversationId)
@@ -107,6 +382,7 @@ export async function sendMessageSDK(
 
   // Use provided settings or defaults
   const effectiveSettings = settings || DEFAULT_CONVERSATION_SETTINGS
+  const effectiveGitSettings = gitSettings || DEFAULT_GIT_SETTINGS
 
   // Check if session has expired (Claude sessions last ~30 days)
   let effectiveSessionId = sessionId
@@ -134,6 +410,17 @@ export async function sendMessageSDK(
     agentId,
     message: userMessage
   })
+
+  // Track user prompt for git commit message
+  if (!sessionPrompts.has(conversationId)) {
+    sessionPrompts.set(conversationId, [])
+  }
+  sessionPrompts.get(conversationId)!.push(message)
+
+  // Extract agent name from file path (e.g., ".claude/agents/my-agent.md" -> "my-agent")
+  const agentName = agentFilePath
+    ? agentFilePath.split('/').pop()?.replace('.md', '') || 'agent'
+    : 'chorus'
 
   // Track state during streaming
   let capturedSessionId: string | null = null
@@ -229,7 +516,7 @@ export async function sendMessageSDK(
     // Enable partial messages for real-time text streaming
     options.includePartialMessages = true
 
-    // Add hooks for file change notifications
+    // Add hooks for file change notifications and auto-commit tracking
     options.hooks = {
       PostToolUse: [
         {
@@ -240,7 +527,13 @@ export async function sendMessageSDK(
                 const toolInput = input.tool_input as { file_path?: string } | undefined
                 const filePath = toolInput?.file_path
                 const toolName = input.tool_name
-                if (filePath && (toolName === 'Write' || toolName === 'Edit')) {
+                if (filePath && (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit')) {
+                  // Track file for auto-commit
+                  if (!turnFileChanges.has(conversationId)) {
+                    turnFileChanges.set(conversationId, new Set())
+                  }
+                  turnFileChanges.get(conversationId)!.add(filePath)
+
                   // Persist file change as a message for session resumption
                   const fileChangeMessage: ConversationMessage = {
                     uuid: uuidv4(),
@@ -260,6 +553,18 @@ export async function sendMessageSDK(
                   })
                 }
               }
+              return { continue: true }
+            }
+          ]
+        }
+      ],
+      // Stop hook for final commit when agent stops
+      Stop: [
+        {
+          hooks: [
+            async () => {
+              // Final commit on stop - catches any uncommitted changes
+              await commitOnStop(conversationId, repoPath, mainWindow, effectiveGitSettings)
               return { continue: true }
             }
           ]
@@ -318,6 +623,11 @@ export async function sendMessageSDK(
           claudeMessage: systemMsg as ClaudeCodeMessage
         }
         appendMessage(conversationId, systemMessage)
+
+        // Auto-create agent branch (only for new sessions)
+        if (isNewSession) {
+          await ensureAgentBranch(conversationId, newSessionId, agentName, repoPath, mainWindow, effectiveGitSettings)
+        }
       }
 
       // Handle partial assistant messages (real-time streaming)
@@ -493,6 +803,9 @@ export async function sendMessageSDK(
             sessionCreatedAt: sessionCreatedAtNow
           })
         }
+
+        // Auto-commit changes from this turn (commit-per-turn)
+        await commitTurnChanges(conversationId, repoPath, message, mainWindow, effectiveGitSettings)
       }
     }
 
@@ -624,6 +937,7 @@ export async function sendMessageSDK(
     // Cleanup
     activeStreams.delete(conversationId)
     cancelPendingPermissions(conversationId)
+    cleanupGitTracking(conversationId)
 
     // Send ready status
     mainWindow.webContents.send('agent:status', {

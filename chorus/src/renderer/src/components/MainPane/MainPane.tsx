@@ -56,8 +56,6 @@ function EmptyPanePlaceholder() {
 export function MainPane() {
   const {
     workspaces,
-    selectedWorkspaceId,
-    selectedFilePath,
     tabs,
     activeTabId,
     loadTabs,
@@ -123,8 +121,6 @@ export function MainPane() {
     setDraggedTabId(null)
   }, [])
 
-  const selectedWorkspace = workspaces.find((ws) => ws.id === selectedWorkspaceId)
-
   // Get active tab for rendering
   const activeTab = tabs.find((t) => t.id === activeTabId)
 
@@ -165,16 +161,6 @@ export function MainPane() {
 
   // Determine what to show based on active tab or selection state
   const renderContent = () => {
-    // Workspace overview always takes full space (no split)
-    if (!activeTab && selectedWorkspace) {
-      return <WorkspaceOverview workspace={selectedWorkspace} />
-    }
-
-    // Nothing selected - show welcome
-    if (!activeTab && !selectedWorkspace) {
-      return <WelcomeView />
-    }
-
     // Split pane mode
     if (splitPaneEnabled) {
       return (
@@ -193,7 +179,7 @@ export function MainPane() {
       )
     }
 
-    // Single pane mode (original behavior)
+    // Single pane mode - content is determined by active tab only
     // If there's an active chat tab, show chat
     if (activeTab?.type === 'chat' && activeTab.conversationId && activeTab.agentId && activeTab.workspaceId) {
       return (
@@ -218,17 +204,7 @@ export function MainPane() {
       return <FileViewer filePath={activeTab.filePath} />
     }
 
-    // File is selected without tab - show file viewer
-    if (selectedFilePath) {
-      return <FileViewer filePath={selectedFilePath} />
-    }
-
-    // Workspace is selected - show overview
-    if (selectedWorkspace) {
-      return <WorkspaceOverview workspace={selectedWorkspace} />
-    }
-
-    // Nothing selected - show welcome
+    // No active tab - show welcome view
     return <WelcomeView />
   }
 

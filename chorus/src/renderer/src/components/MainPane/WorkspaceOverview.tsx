@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ChangesPanel } from './ChangesPanel'
 import { BranchCommitsGrid } from './BranchCommitsGrid'
 import { WorkspaceSettings } from './WorkspaceSettings'
+import { AgentSessionsPanel } from './AgentSessionsPanel'
 import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import type { Workspace } from '../../types'
@@ -139,6 +140,14 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
             onBranchChange={handleBranchChange}
           />
         </div>
+      )}
+
+      {/* Agent sessions (auto-created branches) */}
+      {workspace.gitBranch && (
+        <AgentSessionsPanel
+          workspacePath={workspace.path}
+          onBranchChange={handleBranchChange}
+        />
       )}
 
       {/* Workspace default settings */}

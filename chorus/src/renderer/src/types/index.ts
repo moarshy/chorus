@@ -47,7 +47,14 @@ export type {
   TodoUpdateEvent,
   FileChange,
   // Slash command types
-  SlashCommand
+  SlashCommand,
+  // Git automation types
+  GitSettings,
+  AgentBranchInfo,
+  GitBranchCreatedEvent,
+  GitCommitCreatedEvent,
+  DiffHunk,
+  FileDiff
 } from '../../../preload/index.d'
 
 // UI-specific types

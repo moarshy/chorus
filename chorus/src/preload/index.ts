@@ -53,6 +53,23 @@ interface TodoUpdateEvent {
   timestamp: string
 }
 
+// Git branch created event (from auto-branch)
+interface GitBranchCreatedEvent {
+  conversationId: string
+  branchName: string
+  agentName: string
+}
+
+// Git commit created event (from auto-commit)
+interface GitCommitCreatedEvent {
+  conversationId: string
+  branchName: string
+  commitHash: string
+  message: string
+  files: string[]
+  type: 'turn' | 'stop'
+}
+
 // Custom APIs for renderer - these are the ONLY APIs renderer can access
 const api = {
   // Settings operations
@@ -105,6 +122,30 @@ const api = {
     clone: (url: string, targetDir: string) => ipcRenderer.invoke('git:clone', url, targetDir),
     cancelClone: () => ipcRenderer.invoke('git:cancel-clone'),
 
+    // New automated git operations
+    createBranch: (path: string, branchName: string) =>
+      ipcRenderer.invoke('git:create-branch', path, branchName),
+    commit: (path: string, message: string) =>
+      ipcRenderer.invoke('git:commit', path, message),
+    getDiff: (path: string, commitHash?: string) =>
+      ipcRenderer.invoke('git:get-diff', path, commitHash),
+    getDiffBetweenBranches: (path: string, baseBranch: string, targetBranch: string) =>
+      ipcRenderer.invoke('git:get-diff-between-branches', path, baseBranch, targetBranch),
+    merge: (path: string, sourceBranch: string, options?: { squash?: boolean }) =>
+      ipcRenderer.invoke('git:merge', path, sourceBranch, options),
+    deleteBranch: (path: string, branchName: string, force?: boolean) =>
+      ipcRenderer.invoke('git:delete-branch', path, branchName, force),
+    branchExists: (path: string, branchName: string) =>
+      ipcRenderer.invoke('git:branch-exists', path, branchName),
+    getAgentBranches: (path: string) =>
+      ipcRenderer.invoke('git:get-agent-branches', path),
+    stash: (path: string, message?: string) =>
+      ipcRenderer.invoke('git:stash', path, message),
+    stashPop: (path: string) =>
+      ipcRenderer.invoke('git:stash-pop', path),
+    push: (path: string, branchName?: string, options?: { setUpstream?: boolean; force?: boolean }) =>
+      ipcRenderer.invoke('git:push', path, branchName, options),
+
     // Clone progress events
     onCloneProgress: (callback: (progress: CloneProgress) => void) => {
       const handler = (_event: unknown, progress: CloneProgress) => callback(progress)
@@ -115,6 +156,18 @@ const api = {
       const handler = (_event: unknown, result: CloneResult) => callback(result)
       ipcRenderer.on('git:clone-complete', handler)
       return () => ipcRenderer.removeListener('git:clone-complete', handler)
+    },
+
+    // Git commit events (from agent auto-commits)
+    onBranchCreated: (callback: (event: GitBranchCreatedEvent) => void) => {
+      const handler = (_event: unknown, data: GitBranchCreatedEvent) => callback(data)
+      ipcRenderer.on('git:branch-created', handler)
+      return () => ipcRenderer.removeListener('git:branch-created', handler)
+    },
+    onCommitCreated: (callback: (event: GitCommitCreatedEvent) => void) => {
+      const handler = (_event: unknown, data: GitCommitCreatedEvent) => callback(data)
+      ipcRenderer.on('git:commit-created', handler)
+      return () => ipcRenderer.removeListener('git:commit-created', handler)
     }
   },
 
