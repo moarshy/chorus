@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ChangesPanel } from './ChangesPanel'
 import { BranchCommitsGrid } from './BranchCommitsGrid'
 import { WorkspaceSettings } from './WorkspaceSettings'
@@ -41,6 +42,12 @@ const ChevronRightIcon = () => (
   </svg>
 )
 
+const CommandIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+  </svg>
+)
+
 // Sparkle icon for Chorus (general) agent
 const SparkleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
@@ -73,10 +80,19 @@ function getInitials(name: string): string {
 
 export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
   const { setRightPanelTab, setRightPanelCollapsed } = useUIStore()
-  const { selectAgent, refreshWorkspace } = useWorkspaceStore()
+  const { selectAgent, refreshWorkspace, loadCommands, getCommands } = useWorkspaceStore()
+
+  // Load slash commands on mount
+  useEffect(() => {
+    loadCommands(workspace.id)
+  }, [workspace.id, loadCommands])
+
+  const commands = getCommands(workspace.id)
 
   const handleBranchChange = async () => {
     await refreshWorkspace(workspace.id)
+    // Also refresh commands after branch change
+    loadCommands(workspace.id)
   }
 
   return (
@@ -128,6 +144,39 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
       {/* Workspace default settings */}
       <WorkspaceSettings workspaceId={workspace.id} />
 
+      {/* Slash Commands section */}
+      {commands.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
+            <CommandIcon />
+            Slash Commands ({commands.length})
+          </h2>
+          <div className="p-4 rounded-lg bg-input border border-default">
+            <div className="space-y-2">
+              {commands.slice(0, 5).map((cmd) => (
+                <div key={cmd.name} className="flex items-start gap-3">
+                  <span className="text-blue-400 font-mono text-sm whitespace-nowrap">/{cmd.name}</span>
+                  {cmd.argumentHint && (
+                    <span className="text-muted text-sm whitespace-nowrap">{cmd.argumentHint}</span>
+                  )}
+                  {cmd.description && (
+                    <span className="text-secondary text-sm truncate">{cmd.description}</span>
+                  )}
+                </div>
+              ))}
+              {commands.length > 5 && (
+                <p className="text-muted text-sm pt-2">
+                  +{commands.length - 5} more commands
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-muted mt-4 pt-3 border-t border-default">
+              Use <kbd className="px-1.5 py-0.5 rounded bg-hover font-mono">/</kbd> in chat to invoke commands
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Agents section */}
       <div className="mb-8">
         <h2 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">
@@ -156,7 +205,7 @@ export function WorkspaceOverview({ workspace }: WorkspaceOverviewProps) {
                 return (
                   <div
                     key={agent.id}
-                    onClick={() => selectAgent(agent.id)}
+                    onClick={() => selectAgent(agent.id, workspace.id)}
                     className="flex items-center gap-3 p-3 rounded-lg bg-input border border-default hover:bg-hover hover:border-accent/30 transition-all cursor-pointer group"
                   >
                     {/* Avatar */}

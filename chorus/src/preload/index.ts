@@ -216,6 +216,14 @@ const api = {
       ipcRenderer.invoke('workspace-settings:set', workspaceId, settings),
     has: (workspaceId: string) =>
       ipcRenderer.invoke('workspace-settings:has', workspaceId)
+  },
+
+  // Slash commands operations
+  commands: {
+    discover: (workspaceId: string) =>
+      ipcRenderer.invoke('commands:discover', workspaceId),
+    execute: (workspaceId: string, commandName: string, args: string) =>
+      ipcRenderer.invoke('commands:execute', workspaceId, commandName, args)
   }
 }
 

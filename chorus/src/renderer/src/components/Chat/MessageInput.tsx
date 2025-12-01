@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect, KeyboardEvent, useMemo } from 'react'
-import type { Agent, Workspace } from '../../types'
+import type { Agent, Workspace, SlashCommand } from '../../types'
 import { useChatStore } from '../../stores/chat-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useFileSearch } from '../../hooks/useFileSearch'
 import { useMentionTrigger } from '../../hooks/useMentionTrigger'
+import { useSlashCommandTrigger } from '../../hooks/useSlashCommandTrigger'
 import { MentionDropdown } from './MentionDropdown'
+import { SlashCommandDropdown } from './SlashCommandDropdown'
 
 interface MessageInputProps {
   agent: Agent
@@ -21,8 +24,15 @@ const SendIcon = () => (
 export function MessageInput({ agent, workspace }: MessageInputProps) {
   const [message, setMessage] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [commandSelectedIndex, setCommandSelectedIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { isStreaming, isLoading, sendMessage, activeConversationId, streamingConversationId } = useChatStore()
+  const { getCommands, loadCommands } = useWorkspaceStore()
+
+  // Load slash commands when workspace changes
+  useEffect(() => {
+    loadCommands(workspace.id)
+  }, [workspace.id, loadCommands])
 
   // File search for @ mentions
   const { search } = useFileSearch(workspace.path)
@@ -32,6 +42,26 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
     textareaRef,
     message
   )
+
+  // Slash command trigger detection
+  const {
+    isOpen: isCommandOpen,
+    query: commandQuery,
+    position: commandPosition,
+    close: closeCommand
+  } = useSlashCommandTrigger(textareaRef, message)
+
+  // Get and filter slash commands
+  const allCommands = getCommands(workspace.id)
+  const filteredCommands = useMemo(() => {
+    if (!isCommandOpen) return []
+    const q = commandQuery.toLowerCase()
+    return allCommands.filter(
+      (cmd) =>
+        cmd.name.toLowerCase().includes(q) ||
+        cmd.description?.toLowerCase().includes(q)
+    )
+  }, [isCommandOpen, commandQuery, allCommands])
 
   // Filter files based on query
   const filteredFiles = useMemo(() => {
@@ -43,6 +73,11 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
   useEffect(() => {
     setSelectedIndex(0)
   }, [query, isOpen])
+
+  // Reset command selected index when command query changes
+  useEffect(() => {
+    setCommandSelectedIndex(0)
+  }, [commandQuery, isCommandOpen])
 
   // Only disable if THIS conversation is streaming
   const isThisConversationStreaming = isStreaming && streamingConversationId === activeConversationId
@@ -81,6 +116,38 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
     }, 0)
   }
 
+  // Execute slash command
+  const executeSlashCommand = async (command: SlashCommand) => {
+    closeCommand()
+
+    // Extract args from message (everything after command name)
+    const commandWithSlash = `/${command.name}`
+    const fullMessage = message.trim()
+
+    // Check if message starts with the command
+    let args = ''
+    if (fullMessage.startsWith(commandWithSlash)) {
+      args = fullMessage.slice(commandWithSlash.length).trim()
+    }
+
+    try {
+      const result = await window.api.commands.execute(workspace.id, command.name, args)
+      if (result.success && result.data) {
+        // Clear input and send the rendered prompt
+        setMessage('')
+        await sendMessage(result.data, workspace.id, agent.id, workspace.path, agent.filePath)
+      } else {
+        // Show error - for now just log it
+        console.error('Failed to execute command:', result.error)
+      }
+    } catch (error) {
+      console.error('Failed to execute command:', error)
+    }
+
+    // Refocus
+    textareaRef.current?.focus()
+  }
+
   const handleSubmit = async () => {
     const trimmed = message.trim()
     if (!trimmed || isDisabled) return
@@ -96,7 +163,40 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle dropdown navigation when open
+    // Handle slash command dropdown navigation when open
+    if (isCommandOpen && filteredCommands.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setCommandSelectedIndex((prev) => (prev + 1) % filteredCommands.length)
+          return
+        case 'ArrowUp':
+          e.preventDefault()
+          setCommandSelectedIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length)
+          return
+        case 'Enter':
+          e.preventDefault()
+          executeSlashCommand(filteredCommands[commandSelectedIndex])
+          return
+        case 'Tab':
+          e.preventDefault()
+          // Tab completes the command name in the input
+          const selectedCmd = filteredCommands[commandSelectedIndex]
+          setMessage(`/${selectedCmd.name} `)
+          closeCommand()
+          setTimeout(() => {
+            const pos = selectedCmd.name.length + 2
+            textareaRef.current?.setSelectionRange(pos, pos)
+          }, 0)
+          return
+        case 'Escape':
+          e.preventDefault()
+          closeCommand()
+          return
+      }
+    }
+
+    // Handle mention dropdown navigation when open
     if (isOpen && filteredFiles.length > 0) {
       switch (e.key) {
         case 'ArrowDown':
@@ -160,6 +260,17 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
         </button>
       </div>
 
+      {/* Slash command dropdown */}
+      {isCommandOpen && (
+        <SlashCommandDropdown
+          commands={filteredCommands}
+          selectedIndex={commandSelectedIndex}
+          position={commandPosition}
+          onSelect={executeSlashCommand}
+          onClose={closeCommand}
+        />
+      )}
+
       {/* Mention dropdown */}
       {isOpen && (
         <MentionDropdown
@@ -173,6 +284,8 @@ export function MessageInput({ agent, workspace }: MessageInputProps) {
 
       <div className="flex justify-between mt-2 text-xs text-muted px-1">
         <span>
+          <kbd className="px-1.5 py-0.5 rounded bg-hover font-mono">/</kbd> commands
+          {' '}
           <kbd className="px-1.5 py-0.5 rounded bg-hover font-mono">@</kbd> mention files
         </span>
         <span>

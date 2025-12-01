@@ -26,6 +26,10 @@ import {
   discoverAgents,
   getWorkspaceInfo
 } from './services/workspace-service'
+import {
+  discoverCommands,
+  executeCommand
+} from './services/slash-command-service'
 import { listDirectory, readFile, writeFile, walkDirectory } from './services/fs-service'
 import { isRepo, getStatus, getBranch, getLog, getLogForBranch, clone, cancelClone, listBranches, checkout } from './services/git-service'
 import {
@@ -199,6 +203,40 @@ app.whenReady().then(() => {
     try {
       const agents = await discoverAgents(repoPath)
       return { success: true, data: agents }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // ============================================
+  // SLASH COMMAND IPC HANDLERS
+  // ============================================
+
+  ipcMain.handle('commands:discover', async (_event, workspaceId: string) => {
+    try {
+      const workspace = getWorkspaces().find(w => w.id === workspaceId)
+      if (!workspace) {
+        return { success: false, error: 'Workspace not found' }
+      }
+      const commands = await discoverCommands(workspace.path)
+      return { success: true, data: commands }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('commands:execute', async (_event, workspaceId: string, commandName: string, args: string) => {
+    try {
+      const workspace = getWorkspaces().find(w => w.id === workspaceId)
+      if (!workspace) {
+        return { success: false, error: 'Workspace not found' }
+      }
+      const result = await executeCommand(workspace.path, commandName, args)
+      if (result.success) {
+        return { success: true, data: result.prompt }
+      } else {
+        return { success: false, error: result.error }
+      }
     } catch (error) {
       return { success: false, error: String(error) }
     }

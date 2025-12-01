@@ -25,6 +25,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "electron-store": "^8.2.0",
     "fuse.js": "^7.1.0",
+    "gray-matter": "^4.0.3",
     "mermaid": "10.9.1",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.1.1",

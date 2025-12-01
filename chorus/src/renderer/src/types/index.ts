@@ -43,7 +43,9 @@ export type {
   // Todo tracking types
   TodoItem,
   TodoUpdateEvent,
-  FileChange
+  FileChange,
+  // Slash command types
+  SlashCommand
 } from '../../../preload/index.d'
 
 // UI-specific types

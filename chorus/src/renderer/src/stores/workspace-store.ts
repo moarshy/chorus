@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Workspace, ChorusSettings, Tab } from '../types'
+import type { Workspace, ChorusSettings, Tab, SlashCommand } from '../types'
 
 interface WorkspaceStore {
   // State
@@ -15,6 +15,9 @@ interface WorkspaceStore {
   // Tab state
   tabs: Tab[]
   activeTabId: string | null
+
+  // Slash commands state (per-workspace)
+  workspaceCommands: Map<string, SlashCommand[]>
 
   // Clone state
   cloneProgress: {
@@ -45,6 +48,11 @@ interface WorkspaceStore {
   activateTab: (tabId: string) => void
   loadTabs: () => Promise<void>
   saveTabs: () => Promise<void>
+
+  // Slash command actions
+  loadCommands: (workspaceId: string) => Promise<void>
+  refreshCommands: (workspaceId: string) => Promise<void>
+  getCommands: (workspaceId: string) => SlashCommand[]
 }
 
 // Generate UUID for tabs
@@ -64,6 +72,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   error: null,
   tabs: [],
   activeTabId: null,
+  workspaceCommands: new Map(),
   cloneProgress: null,
 
   // Load all workspaces
@@ -441,5 +450,32 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     } catch {
       // Silently fail
     }
+  },
+
+  // Slash command actions
+  loadCommands: async (workspaceId: string) => {
+    if (!window.api) return
+
+    try {
+      const result = await window.api.commands.discover(workspaceId)
+      if (result.success && result.data) {
+        set((state) => {
+          const newMap = new Map(state.workspaceCommands)
+          newMap.set(workspaceId, result.data!)
+          return { workspaceCommands: newMap }
+        })
+      }
+    } catch {
+      // Silently fail
+    }
+  },
+
+  refreshCommands: async (workspaceId: string) => {
+    // Same as loadCommands - always re-scans
+    await get().loadCommands(workspaceId)
+  },
+
+  getCommands: (workspaceId: string) => {
+    return get().workspaceCommands.get(workspaceId) || []
   }
 }))

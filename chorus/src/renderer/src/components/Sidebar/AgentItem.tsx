@@ -47,15 +47,35 @@ function getInitials(name: string): string {
 }
 
 export function AgentItem({ agent }: AgentItemProps) {
-  const { selectedAgentId, selectAgent } = useWorkspaceStore()
-  const { getAgentUnreadCount, getAgentStatus } = useChatStore()
+  const { selectedAgentId, selectAgent, selectConversation } = useWorkspaceStore()
+  const { getAgentUnreadCount, getAgentStatus, loadConversations, createConversation } = useChatStore()
   const isSelected = selectedAgentId === agent.id
   const unreadCount = getAgentUnreadCount(agent.id)
   const agentStatus = getAgentStatus(agent.id)
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
     selectAgent(agent.id, agent.workspaceId)
+
+    // Load conversations for this agent
+    await loadConversations(agent.workspaceId, agent.id)
+
+    // Get conversations after loading (need to fetch fresh from API result)
+    const result = await window.api.conversation.list(agent.workspaceId, agent.id)
+    if (result.success && result.data) {
+      const agentConversations = result.data
+      if (agentConversations.length > 0) {
+        // Open the most recent conversation as a tab
+        const mostRecent = agentConversations[0]
+        selectConversation(mostRecent.id, agent.id, agent.workspaceId, mostRecent.title)
+      } else {
+        // Create a new conversation if none exist
+        const newConversationId = await createConversation(agent.workspaceId, agent.id)
+        if (newConversationId) {
+          selectConversation(newConversationId, agent.id, agent.workspaceId, 'New Conversation')
+        }
+      }
+    }
   }
 
   const avatarColor = agent.isGeneral ? '#8b5cf6' : getAvatarColor(agent.name)  // Purple for Chorus

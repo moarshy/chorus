@@ -364,6 +364,18 @@ interface WorkspaceSettings {
   defaultModel: string
 }
 
+// Slash command from .claude/commands/*.md files
+interface SlashCommand {
+  name: string              // Derived from filename (without .md)
+  path: string              // Relative path within .claude/commands/
+  filePath: string          // Absolute path to .md file
+  description?: string      // From frontmatter
+  argumentHint?: string     // From frontmatter
+  allowedTools?: string     // From frontmatter
+  model?: string            // From frontmatter
+  content: string           // Full Markdown content (without frontmatter)
+}
+
 // ============================================
 // API Interface
 // ============================================
@@ -449,6 +461,11 @@ interface WorkspaceSettingsAPI {
   has: (workspaceId: string) => Promise<ApiResult<boolean>>
 }
 
+interface CommandsAPI {
+  discover: (workspaceId: string) => Promise<ApiResult<SlashCommand[]>>
+  execute: (workspaceId: string, commandName: string, args: string) => Promise<ApiResult<string>>
+}
+
 interface CustomAPI {
   settings: SettingsAPI
   workspace: WorkspaceAPI
@@ -460,6 +477,7 @@ interface CustomAPI {
   agent: AgentAPI
   session: SessionAPI
   workspaceSettings: WorkspaceSettingsAPI
+  commands: CommandsAPI
 }
 
 declare global {
@@ -513,5 +531,7 @@ export type {
   // Conversation settings types
   PermissionMode,
   ConversationSettings,
-  WorkspaceSettings
+  WorkspaceSettings,
+  // Slash command types
+  SlashCommand
 }
