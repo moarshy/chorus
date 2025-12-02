@@ -1,6 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useUIStore } from '../../stores/ui-store'
+import type { EditorFontFamily, EditorFontSize } from '../../types'
+
+// Font family options
+const FONT_FAMILIES: { value: EditorFontFamily; label: string; stack: string }[] = [
+  { value: 'default', label: 'Default (System)', stack: "'SF Mono', Menlo, Monaco, 'Courier New', monospace" },
+  { value: 'jetbrains-mono', label: 'JetBrains Mono', stack: "'JetBrains Mono', monospace" },
+  { value: 'fira-code', label: 'Fira Code', stack: "'Fira Code', monospace" },
+  { value: 'sf-mono', label: 'SF Mono', stack: "'SF Mono', monospace" },
+  { value: 'consolas', label: 'Consolas', stack: "Consolas, monospace" }
+]
+
+// Font size options
+const FONT_SIZES: EditorFontSize[] = [12, 13, 14, 15, 16]
 
 // Check Icon
 const CheckIcon = () => (
@@ -18,16 +31,24 @@ const XIcon = () => (
 )
 
 export function SettingsDialog() {
-  const { settings, setRootWorkspaceDir } = useWorkspaceStore()
+  const { settings, setRootWorkspaceDir, loadSettings } = useWorkspaceStore()
   const { closeSettings } = useUIStore()
   const [rootDir, setRootDir] = useState(settings?.rootWorkspaceDir || '')
   const [isSaving, setIsSaving] = useState(false)
   const [claudePath, setClaudePath] = useState<string | null>(null)
   const [isCheckingClaude, setIsCheckingClaude] = useState(true)
+  const [fontFamily, setFontFamily] = useState<EditorFontFamily>(settings?.editorFontFamily || 'default')
+  const [fontSize, setFontSize] = useState<EditorFontSize>(settings?.editorFontSize || 14)
 
   useEffect(() => {
     if (settings?.rootWorkspaceDir) {
       setRootDir(settings.rootWorkspaceDir)
+    }
+    if (settings?.editorFontFamily) {
+      setFontFamily(settings.editorFontFamily)
+    }
+    if (settings?.editorFontSize) {
+      setFontSize(settings.editorFontSize)
     }
   }, [settings])
 
@@ -54,10 +75,22 @@ export function SettingsDialog() {
   }
 
   const handleSave = async () => {
-    if (!rootDir) return
-
     setIsSaving(true)
-    await setRootWorkspaceDir(rootDir)
+
+    // Save all settings
+    if (rootDir) {
+      await setRootWorkspaceDir(rootDir)
+    }
+
+    // Save editor font settings
+    await window.api.settings.set({
+      editorFontFamily: fontFamily,
+      editorFontSize: fontSize
+    })
+
+    // Reload settings to update the store
+    await loadSettings()
+
     setIsSaving(false)
     closeSettings()
   }
@@ -126,6 +159,58 @@ export function SettingsDialog() {
               <button onClick={handleSelectDirectory} className="btn btn-secondary">
                 Browse
               </button>
+            </div>
+          </div>
+
+          {/* Editor Font Settings */}
+          <div>
+            <label className="block text-sm text-secondary mb-3">
+              Editor Appearance
+            </label>
+            <div className="space-y-4">
+              {/* Font Family */}
+              <div>
+                <label className="block text-xs text-muted mb-2">Font Family</label>
+                <select
+                  value={fontFamily}
+                  onChange={(e) => setFontFamily(e.target.value as EditorFontFamily)}
+                  className="input w-full"
+                >
+                  {FONT_FAMILIES.map((font) => (
+                    <option key={font.value} value={font.value}>
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Font Size */}
+              <div>
+                <label className="block text-xs text-muted mb-2">Font Size</label>
+                <select
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value) as EditorFontSize)}
+                  className="input w-full"
+                >
+                  {FONT_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size}px
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Preview */}
+              <div
+                className="p-3 rounded-md bg-sidebar border border-default"
+                style={{
+                  fontFamily: FONT_FAMILIES.find(f => f.value === fontFamily)?.stack,
+                  fontSize: `${fontSize}px`
+                }}
+              >
+                <div className="text-muted text-xs mb-1" style={{ fontFamily: 'inherit', fontSize: 'inherit' }}>Preview:</div>
+                <code>const greeting = "Hello, World!";</code>
+              </div>
             </div>
           </div>
 

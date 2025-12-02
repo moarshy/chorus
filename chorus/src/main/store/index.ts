@@ -52,12 +52,18 @@ export interface OpenTabsState {
   activeTabId: string | null
 }
 
+// Editor font options
+export type EditorFontFamily = 'default' | 'jetbrains-mono' | 'fira-code' | 'sf-mono' | 'consolas'
+export type EditorFontSize = 12 | 13 | 14 | 15 | 16
+
 export interface ChorusSettings {
   rootWorkspaceDir: string
   theme: 'dark' | 'light'
   chatSidebarCollapsed: boolean
   chatSidebarWidth: number
   openTabs?: OpenTabsState
+  editorFontFamily?: EditorFontFamily
+  editorFontSize?: EditorFontSize
 }
 
 interface StoreSchema {
@@ -101,7 +107,9 @@ export function initStore(): void {
         rootWorkspaceDir: '',
         theme: 'dark',
         chatSidebarCollapsed: false,
-        chatSidebarWidth: 240
+        chatSidebarWidth: 240,
+        editorFontFamily: 'default',
+        editorFontSize: 14
       }
     }
   })

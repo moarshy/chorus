@@ -65,6 +65,10 @@ interface SplitPaneSettings {
   secondPaneGroup: TabGroup     // Tab group for second pane (bottom/right)
 }
 
+// Editor font options
+type EditorFontFamily = 'default' | 'jetbrains-mono' | 'fira-code' | 'sf-mono' | 'consolas'
+type EditorFontSize = 12 | 13 | 14 | 15 | 16
+
 interface ChorusSettings {
   rootWorkspaceDir: string
   theme: 'dark' | 'light'
@@ -72,6 +76,8 @@ interface ChorusSettings {
   chatSidebarWidth: number
   openTabs?: OpenTabsState
   splitPane?: SplitPaneSettings
+  editorFontFamily?: EditorFontFamily
+  editorFontSize?: EditorFontSize
 }
 
 // ============================================
@@ -639,6 +645,8 @@ export type {
   TabGroup,
   SplitPaneSettings,
   ChorusSettings,
+  EditorFontFamily,
+  EditorFontSize,
   DirectoryEntry,
   GitChange,
   GitStatus,

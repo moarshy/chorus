@@ -7,6 +7,8 @@ export type {
   TabGroup,
   SplitPaneSettings,
   ChorusSettings,
+  EditorFontFamily,
+  EditorFontSize,
   DirectoryEntry,
   GitChange,
   GitStatus,

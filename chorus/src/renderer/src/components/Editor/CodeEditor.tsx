@@ -8,6 +8,8 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { defaultKeymap, indentWithTab } from '@codemirror/commands'
 import { search, searchKeymap } from '@codemirror/search'
 import { getLanguageExtension } from './languageSupport'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { getFontStack } from '../../utils/editorFonts'
 
 interface CodeEditorProps {
   content: string
@@ -24,13 +26,34 @@ export function CodeEditor({
   onSave,
   readOnly = false
 }: CodeEditorProps) {
+  // Get font settings from store - subscribe to specific values for reactivity
+  const fontFamily = useWorkspaceStore((state) => state.settings?.editorFontFamily || 'default')
+  const fontSize = useWorkspaceStore((state) => state.settings?.editorFontSize || 14)
+
   // Build extensions array, memoized to prevent re-renders
   const extensions = useMemo(() => {
+    const fontStack = getFontStack(fontFamily)
+
     const exts = [
       EditorView.lineWrapping,
       bracketMatching(),
       closeBrackets(),
-      search()
+      search(),
+      // Apply custom font settings
+      EditorView.theme({
+        '&': {
+          fontFamily: fontStack,
+          fontSize: `${fontSize}px`
+        },
+        '.cm-content': {
+          fontFamily: fontStack,
+          fontSize: `${fontSize}px`
+        },
+        '.cm-gutters': {
+          fontFamily: fontStack,
+          fontSize: `${fontSize}px`
+        }
+      })
     ]
 
     // Add language-specific extension if available
@@ -66,7 +89,7 @@ export function CodeEditor({
     }
 
     return exts
-  }, [language, onSave, readOnly])
+  }, [language, onSave, readOnly, fontFamily, fontSize])
 
   // Handle content changes
   const handleChange = useCallback(

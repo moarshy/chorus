@@ -5,6 +5,8 @@ import { EditorView } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { MermaidDiagram } from './MermaidDiagram'
 import { getLanguageExtension } from '../Editor/languageSupport'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { getFontStack } from '../../utils/editorFonts'
 
 interface CodeBlockProps {
   code: string
@@ -28,6 +30,10 @@ const CheckIcon = () => (
 export const CodeBlock = memo(function CodeBlock({ code, language }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
 
+  // Get font settings from store - subscribe to specific values for reactivity
+  const fontFamily = useWorkspaceStore((state) => state.settings?.editorFontFamily || 'default')
+  const fontSize = useWorkspaceStore((state) => state.settings?.editorFontSize || 14)
+
   // Handle mermaid diagrams
   if (language === 'mermaid') {
     return <MermaidDiagram code={code} />
@@ -44,10 +50,23 @@ export const CodeBlock = memo(function CodeBlock({ code, language }: CodeBlockPr
 
   // Build extensions for CodeMirror
   const extensions = useMemo(() => {
+    const fontStack = getFontStack(fontFamily)
+
     const exts = [
       EditorView.lineWrapping,
       EditorState.readOnly.of(true),
-      EditorView.editable.of(false)
+      EditorView.editable.of(false),
+      // Apply custom font settings
+      EditorView.theme({
+        '&': {
+          fontFamily: fontStack,
+          fontSize: `${fontSize}px`
+        },
+        '.cm-content': {
+          fontFamily: fontStack,
+          fontSize: `${fontSize}px`
+        }
+      })
     ]
 
     // Add language-specific extension if available
@@ -57,7 +76,7 @@ export const CodeBlock = memo(function CodeBlock({ code, language }: CodeBlockPr
     }
 
     return exts
-  }, [normalizedLanguage])
+  }, [normalizedLanguage, fontFamily, fontSize])
 
   return (
     <div className="relative group my-3 rounded-lg overflow-hidden border border-default">
