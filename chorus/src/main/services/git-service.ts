@@ -314,11 +314,16 @@ export async function listBranches(path: string): Promise<GitBranch[]> {
 
 /**
  * Checkout a branch
+ * @param path - Repository path
+ * @param branch - Branch name to checkout
+ * @param isRemote - Whether this is a remote branch (e.g., origin/feature).
+ *                   If true, creates a local tracking branch by stripping the remote prefix.
  */
-export async function checkout(path: string, branch: string): Promise<void> {
-  // If it's a remote branch (e.g., origin/feature), create a local tracking branch
-  if (branch.includes('/')) {
-    const localBranchName = branch.split('/').slice(1).join('/')
+export async function checkout(path: string, branch: string, isRemote: boolean = false): Promise<void> {
+  if (isRemote) {
+    // Remote branch: strip remote prefix to create local tracking branch
+    const slashIndex = branch.indexOf('/')
+    const localBranchName = slashIndex > 0 ? branch.substring(slashIndex + 1) : branch
     try {
       // Try to checkout existing local branch first
       runGit(path, `checkout ${localBranchName}`)
@@ -327,6 +332,7 @@ export async function checkout(path: string, branch: string): Promise<void> {
       runGit(path, `checkout -b ${localBranchName} ${branch}`)
     }
   } else {
+    // Local branch: use name as-is (supports branches with slashes like agent/name/id)
     runGit(path, `checkout ${branch}`)
   }
 }

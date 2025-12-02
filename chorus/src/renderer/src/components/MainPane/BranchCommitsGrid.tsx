@@ -599,7 +599,7 @@ export function BranchCommitsGrid({ workspacePath, onBranchChange, localOnly = f
     setError(null)
 
     try {
-      const result = await window.api.git.checkout(workspacePath, branch.name)
+      const result = await window.api.git.checkout(workspacePath, branch.name, branch.isRemote)
       if (result.success) {
         onBranchChange()
         triggerFileTreeRefresh() // Refresh file tree since files changed on disk

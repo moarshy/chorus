@@ -135,7 +135,7 @@ export function BranchSelector({ currentBranch, workspacePath, onBranchChange }:
     setError(null)
 
     try {
-      const result = await window.api.git.checkout(workspacePath, branch.name)
+      const result = await window.api.git.checkout(workspacePath, branch.name, branch.isRemote)
       if (result.success) {
         // Get the local branch name for display
         const localName = branch.isRemote

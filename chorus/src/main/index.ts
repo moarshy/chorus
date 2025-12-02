@@ -452,9 +452,9 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:checkout', async (_event, path: string, branch: string) => {
+  ipcMain.handle('git:checkout', async (_event, path: string, branch: string, isRemote?: boolean) => {
     try {
-      await checkout(path, branch)
+      await checkout(path, branch, isRemote ?? false)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
