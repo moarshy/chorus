@@ -123,29 +123,44 @@ View commit history.
 
 ---
 
-### 4. Automated Git Operations 📋 (Planned)
+### 4. Automated Git Operations ✅
 
-Agent-driven Git automation.
+Agent-driven Git automation with GitButler-style branch management.
 
-#### Auto-Branch per Session
+#### Auto-Branch per Session ✅
 - Creates `agent/{agentName}/{sessionShortId}` branch
 - Automatically on first file change
 - Isolates agent work from main branch
 
-#### Auto-Commit per Turn
+#### Auto-Commit per Turn ✅
 - Commits after each conversation turn
-- Message format: `[Agent] {prompt} \n Files: {list}`
+- Message format: `[Agent] {prompt}`
 - Only if files changed
 
-#### Commit on Stop
+#### Commit on Stop ✅
 - Commits any uncommitted changes when agent stops
 - Ensures work isn't lost
 - Message: `[Agent] Work in progress`
 
-#### Agent Sessions Panel
+#### Agent Sessions Panel ✅
 - Visual list of agent branches in workspace
-- Quick actions: checkout, merge, delete
-- Shows commit count per branch
+- Quick actions: checkout, view changes, push, merge, delete
+- Shows commit count, agent name, and last activity per branch
+
+**Features:**
+- **View Changes:** Shows diff vs comparison branch with inline diff viewer
+- **Comparison Selector:** Choose which branch to compare against (default: main/master)
+- **Inline Diff Viewer:** Expandable file rows showing line-by-line code changes
+- **Push:** Push branch to remote with upstream tracking
+- **Merge Preview:** Shows files to be merged, conflict detection, squash/regular options
+- **Delete:** Remove agent branch with confirmation
+
+**Location:** Workspace Overview → Git tab → Agent Sessions section
+
+#### Push Error Handling ✅
+- Helpful error messages with actionable suggestions
+- Handles: rejected push, no remote, auth required
+- Auto-dismisses after 10 seconds
 
 ---
 
@@ -188,6 +203,9 @@ interface GitBranch {
 | `BranchCommitsGrid` | WorkspaceOverview | Multi-branch commit view |
 | `ChangesPanel` | WorkspaceOverview | Uncommitted changes |
 | `GitPanel` | WorkspaceOverview | Combined git info |
+| `AgentSessionsPanel` | WorkspaceOverview | Agent branch management |
+| `DiffHunkViewer` | AgentSessionsPanel | Inline diff display |
+| `MergePreviewDialog` | Dialog | Merge preview with conflict detection |
 
 ---
 
@@ -203,6 +221,11 @@ interface GitBranch {
 | `git:discardChanges` | Revert file to last commit |
 | `git:log` | Get commit history |
 | `git:clone` | Clone repository (with progress) |
+| `git:get-agent-branches` | List agent session branches |
+| `git:get-diff-between-branches` | Get diff between two branches |
+| `git:push` | Push branch to remote |
+| `git:merge` | Merge branch into current |
+| `git:analyze-merge` | Analyze merge for preview (E-3) |
 
 ---
 
@@ -237,13 +260,21 @@ interface GitBranch {
 ## Related Files
 
 **Services:**
-- `src/main/services/git-service.ts` - All git operations
+- `src/main/services/git-service.ts` - All git operations (including merge analysis)
 
 **Components:**
 - `src/renderer/src/components/Sidebar/BranchSelector.tsx`
 - `src/renderer/src/components/MainPane/BranchCommitsGrid.tsx`
 - `src/renderer/src/components/MainPane/ChangesPanel.tsx`
 - `src/renderer/src/components/MainPane/WorkspaceOverview.tsx`
+- `src/renderer/src/components/MainPane/AgentSessionsPanel.tsx` - Agent branch management
+- `src/renderer/src/components/MainPane/DiffHunkViewer.tsx` - Inline diff display
+- `src/renderer/src/components/dialogs/MergePreviewDialog.tsx` - Merge preview
 
 **Store:**
 - `src/renderer/src/stores/file-tree-store.ts` - Refresh trigger after git ops
+
+**Specifications:**
+- `specifications/12-automated-git-operations/` - Original spec
+- `specifications/12-automated-git-operations/feature-enhancement.md` - P1-P3 enhancements
+- `specifications/12-automated-git-operations/testing-plan.md` - Testing guide

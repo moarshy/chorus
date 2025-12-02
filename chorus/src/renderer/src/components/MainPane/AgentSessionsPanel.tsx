@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react'
 import type { AgentBranchInfo, FileDiff } from '../../types'
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import { DiffHunkViewer } from './DiffHunkViewer'
+import { MergePreviewDialog } from '../dialogs/MergePreviewDialog'
 
 interface AgentSessionsPanelProps {
   workspacePath: string
   onBranchChange: () => void
+}
+
+interface PushError {
+  branch: string
+  message: string
+  suggestion: string
+}
+
+interface MergePreviewState {
+  branch: string
+  targetBranch: string
 }
 
 // SVG Icons
@@ -103,9 +116,25 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
   const [expandedBranch, setExpandedBranch] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionInProgress, setActionInProgress] = useState<string | null>(null)
-  const [diffData, setDiffData] = useState<{ branch: string; files: FileDiff[]; error?: string } | null>(null)
+  const [diffData, setDiffData] = useState<{
+    branch: string
+    files: FileDiff[]
+    baseBranch: string
+    error?: string
+  } | null>(null)
   const [pushSuccess, setPushSuccess] = useState<string | null>(null)
+  const [pushError, setPushError] = useState<PushError | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  // E-1: Expanded files for inline diff
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
+
+  // E-2: Comparison branch selection
+  const [comparisonBranch, setComparisonBranch] = useState<string>('main')
+  const [availableBranches, setAvailableBranches] = useState<string[]>([])
+
+  // E-3: Merge preview dialog
+  const [mergePreview, setMergePreview] = useState<MergePreviewState | null>(null)
 
   const { selectFile } = useWorkspaceStore()
 
@@ -118,6 +147,7 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
 
   useEffect(() => {
     loadBranches()
+    loadAvailableBranches()
 
     // Listen for branch created events
     const unsubBranch = window.api.git.onBranchCreated(() => {
@@ -144,6 +174,51 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
     setLoading(false)
   }
 
+  // E-2: Load available branches for comparison dropdown
+  const loadAvailableBranches = async () => {
+    const result = await window.api.git.listBranches(workspacePath)
+    if (result.success && result.data) {
+      const locals = result.data
+        .filter((b) => !b.isRemote)
+        .map((b) => b.name)
+        .filter((n) => !n.startsWith('agent/'))
+      setAvailableBranches(locals)
+
+      // Set default comparison branch
+      if (locals.includes('main')) {
+        setComparisonBranch('main')
+      } else if (locals.includes('master')) {
+        setComparisonBranch('master')
+      } else if (locals.length > 0) {
+        setComparisonBranch(locals[0])
+      }
+    }
+  }
+
+  // E-1: Toggle file expansion for inline diff
+  const toggleFileExpand = (filePath: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(filePath)) {
+        next.delete(filePath)
+      } else {
+        next.add(filePath)
+      }
+      return next
+    })
+  }
+
+  // E-1: Expand/collapse all files
+  const expandAllFiles = () => {
+    if (diffData?.files) {
+      setExpandedFiles(new Set(diffData.files.map((f) => f.filePath)))
+    }
+  }
+
+  const collapseAllFiles = () => {
+    setExpandedFiles(new Set())
+  }
+
   const handleCheckout = async (branchName: string) => {
     setActionInProgress(branchName)
     const result = await window.api.git.checkout(workspacePath, branchName)
@@ -154,39 +229,48 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
     setActionInProgress(null)
   }
 
-  const handleMerge = async (branchName: string) => {
+  // E-3: Show merge preview dialog instead of merging directly
+  const handleMergeClick = (branchName: string) => {
+    // Use the comparison branch as the merge target
+    setMergePreview({ branch: branchName, targetBranch: comparisonBranch })
+  }
+
+  // E-3: Handle merge confirmation from preview dialog
+  const handleMergeConfirm = async (options: { squash: boolean }) => {
+    if (!mergePreview) return
+
+    const branchName = mergePreview.branch
+    const targetBranch = mergePreview.targetBranch
+    setMergePreview(null)
     setActionInProgress(branchName)
+
     try {
-      // Detect which default branch exists (main or master)
-      const branchesResult = await window.api.git.listBranches(workspacePath)
-      if (!branchesResult.success || !branchesResult.data) {
-        console.error('Failed to list branches')
-        return
-      }
+      // Checkout the target branch first
+      await window.api.git.checkout(workspacePath, targetBranch)
 
-      const localBranches = branchesResult.data.filter(b => !b.isRemote).map(b => b.name)
-      let defaultBranch = 'main'
-      if (localBranches.includes('main')) {
-        defaultBranch = 'main'
-      } else if (localBranches.includes('master')) {
-        defaultBranch = 'master'
-      }
+      // Merge with selected options
+      const mergeResult = await window.api.git.merge(workspacePath, branchName, {
+        squash: options.squash
+      })
 
-      // We need to checkout the default branch first
-      await window.api.git.checkout(workspacePath, defaultBranch)
-
-      // Then merge with squash
-      const mergeResult = await window.api.git.merge(workspacePath, branchName, { squash: true })
       if (mergeResult.success) {
-        // Commit the squashed changes
-        await window.api.git.commit(workspacePath, `Merge agent session: ${branchName}`)
+        if (options.squash) {
+          // Squash merge requires manual commit
+          await window.api.git.commit(workspacePath, `Merge agent session: ${branchName}`)
+        }
         onBranchChange()
         await loadBranches()
+      } else {
+        console.error('Merge failed:', mergeResult.error)
       }
     } catch (error) {
       console.error('Merge failed:', error)
     }
     setActionInProgress(null)
+  }
+
+  const handleMergeCancel = () => {
+    setMergePreview(null)
   }
 
   const handleDeleteClick = (branchName: string) => {
@@ -212,62 +296,87 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
     setDeleteConfirm(null)
   }
 
+  // E-6: Enhanced push with better error handling
   const handlePush = async (branchName: string) => {
     setActionInProgress(branchName)
     setPushSuccess(null)
+    setPushError(null)
+
     const result = await window.api.git.push(workspacePath, branchName, { setUpstream: true })
+
     if (result.success) {
       setPushSuccess(branchName)
       setTimeout(() => setPushSuccess(null), 3000)
+    } else {
+      // Parse error and provide helpful message
+      const error = result.error || 'Unknown error'
+      let suggestion = 'Try again or check terminal for details'
+
+      if (error.includes('rejected') || error.includes('non-fast-forward')) {
+        suggestion = 'Remote has new changes. Pull the latest changes first, then push.'
+      } else if (error.includes('remote') && error.includes('not found')) {
+        suggestion = 'No remote "origin" configured. Add a remote first.'
+      } else if (error.includes('permission') || error.includes('denied')) {
+        suggestion = 'Check your Git credentials or SSH key permissions.'
+      } else if (error.includes('could not read Username') || error.includes('Authentication')) {
+        suggestion = 'Git authentication required. Run "git push" in terminal to authenticate.'
+      } else if (error.includes('does not appear to be a git repository')) {
+        suggestion = 'The remote URL may be incorrect. Check your git remote settings.'
+      }
+
+      setPushError({ branch: branchName, message: error, suggestion })
+      setTimeout(() => setPushError(null), 10000)
     }
+
     setActionInProgress(null)
   }
 
-  const handleViewChanges = async (branchName: string) => {
-    // If already showing diff for this branch, hide it
-    if (diffData?.branch === branchName) {
+  // E-2: View changes with configurable comparison branch
+  const handleViewChanges = async (branchName: string, baseBranch?: string) => {
+    // If already showing diff for this branch and no base branch override, hide it
+    if (diffData?.branch === branchName && !baseBranch) {
       setDiffData(null)
+      setExpandedFiles(new Set())
       return
     }
 
     setActionInProgress(branchName)
 
-    // Detect which default branch exists (main or master)
-    const branchesResult = await window.api.git.listBranches(workspacePath)
-    console.log('[AgentSessionsPanel] Listing branches:', branchesResult)
+    // Use provided base branch or the selected comparison branch
+    const targetBaseBranch = baseBranch || comparisonBranch
 
-    if (!branchesResult.success || !branchesResult.data) {
-      console.error('[AgentSessionsPanel] Failed to list branches:', branchesResult.error)
-      setDiffData({ branch: branchName, files: [], error: 'Failed to list branches' })
-      setActionInProgress(null)
-      return
-    }
+    console.log('[AgentSessionsPanel] Comparing', targetBaseBranch, 'with', branchName)
 
-    const localBranches = branchesResult.data.filter(b => !b.isRemote).map(b => b.name)
-    let defaultBranch = 'main'
-    if (localBranches.includes('main')) {
-      defaultBranch = 'main'
-    } else if (localBranches.includes('master')) {
-      defaultBranch = 'master'
-    }
-
-    console.log('[AgentSessionsPanel] Comparing', defaultBranch, 'with', branchName)
-
-    // Get diff between default branch and the agent branch
+    // Get diff between base branch and the agent branch
     const result = await window.api.git.getDiffBetweenBranches(
       workspacePath,
-      defaultBranch,
+      targetBaseBranch,
       branchName
     )
     console.log('[AgentSessionsPanel] Diff result:', result)
 
     if (result.success && result.data) {
-      setDiffData({ branch: branchName, files: result.data })
+      setDiffData({ branch: branchName, files: result.data, baseBranch: targetBaseBranch })
+      setExpandedFiles(new Set()) // Reset expanded files when loading new diff
     } else {
       console.error('[AgentSessionsPanel] Diff failed:', result.error)
-      setDiffData({ branch: branchName, files: [], error: result.error || 'Failed to get diff' })
+      setDiffData({
+        branch: branchName,
+        files: [],
+        baseBranch: targetBaseBranch,
+        error: result.error || 'Failed to get diff'
+      })
     }
     setActionInProgress(null)
+  }
+
+  // E-2: Handle comparison branch change
+  const handleComparisonBranchChange = (newBranch: string) => {
+    setComparisonBranch(newBranch)
+    // Re-fetch diff with new comparison branch if diff is showing
+    if (diffData) {
+      handleViewChanges(diffData.branch, newBranch)
+    }
   }
 
   // Format date for display
@@ -382,14 +491,14 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
                     <PushIcon />
                     {pushSuccess === branch.name ? 'Pushed!' : 'Push'}
                   </button>
-                  {/* Merge is always available - it will checkout main/master first */}
+                  {/* E-3: Merge with preview dialog */}
                   <button
-                    onClick={() => handleMerge(branch.name)}
+                    onClick={() => handleMergeClick(branch.name)}
                     disabled={actionInProgress === branch.name}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded bg-hover hover:bg-blue-500/20 text-secondary hover:text-blue-400 transition-colors disabled:opacity-50"
                   >
                     <MergeIcon />
-                    Merge to main
+                    Merge to {comparisonBranch}
                   </button>
                   {!branch.isCurrent && (
                     <button
@@ -407,55 +516,148 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
                     Currently checked out. Switch branches to enable checkout/delete.
                   </p>
                 )}
+                {/* E-6: Push error display */}
+                {pushError?.branch === branch.name && (
+                  <div className="mt-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-xs">
+                    <p className="text-red-400 font-medium">Push failed</p>
+                    <p className="text-muted mt-1 font-mono text-[10px] break-all">
+                      {pushError.message}
+                    </p>
+                    <p className="text-secondary mt-1">💡 {pushError.suggestion}</p>
+                  </div>
+                )}
+
                 {/* Loading indicator for diff */}
                 {actionInProgress === branch.name && diffData?.branch !== branch.name && (
                   <div className="mt-3 border-t border-default pt-3">
                     <p className="text-xs text-muted animate-pulse">Loading changes...</p>
                   </div>
                 )}
-                {/* Diff display */}
+
+                {/* Diff display with E-1 inline diffs and E-2 comparison selector */}
                 {diffData?.branch === branch.name && diffData.files.length > 0 && (
                   <div className="mt-3 border-t border-default pt-3">
+                    {/* E-2: Comparison branch selector */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted">Comparing to:</span>
+                        <select
+                          value={diffData.baseBranch}
+                          onChange={(e) => handleComparisonBranchChange(e.target.value)}
+                          className="bg-input border border-default rounded px-2 py-0.5 text-primary text-xs"
+                        >
+                          {availableBranches.map((b) => (
+                            <option key={b} value={b}>
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* E-1: Expand/Collapse all */}
+                      <div className="flex gap-2 text-xs">
+                        <button
+                          onClick={expandAllFiles}
+                          className="text-muted hover:text-primary transition-colors"
+                        >
+                          Expand All
+                        </button>
+                        <span className="text-muted">|</span>
+                        <button
+                          onClick={collapseAllFiles}
+                          className="text-muted hover:text-primary transition-colors"
+                        >
+                          Collapse
+                        </button>
+                      </div>
+                    </div>
+
                     <h4 className="text-xs font-semibold text-secondary mb-2">
                       Changed Files ({diffData.files.length})
                     </h4>
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
+
+                    <div className="space-y-1 max-h-[500px] overflow-y-auto">
                       {diffData.files.map((file) => (
-                        <button
-                          key={file.filePath}
-                          onClick={() => handleFileClick(file.filePath)}
-                          disabled={file.status === 'deleted'}
-                          className={`w-full flex items-center gap-2 text-xs p-1.5 rounded bg-hover/50 text-left transition-colors ${
-                            file.status === 'deleted'
-                              ? 'opacity-50 cursor-not-allowed'
-                              : 'hover:bg-hover cursor-pointer'
-                          }`}
-                          title={file.status === 'deleted' ? 'File was deleted' : `Open ${file.filePath}`}
-                        >
-                          <span className={`font-mono flex-shrink-0 ${
-                            file.status === 'added' ? 'text-green-400' :
-                            file.status === 'deleted' ? 'text-red-400' :
-                            file.status === 'renamed' ? 'text-blue-400' :
-                            'text-yellow-400'
-                          }`}>
-                            {file.status === 'added' ? 'A' :
-                             file.status === 'deleted' ? 'D' :
-                             file.status === 'renamed' ? 'R' : 'M'}
-                          </span>
-                          <span className="flex-1 truncate font-mono">{file.filePath}</span>
-                          <span className="text-green-400 flex-shrink-0">+{file.additions}</span>
-                          <span className="text-red-400 flex-shrink-0">-{file.deletions}</span>
-                        </button>
+                        <div key={file.filePath} className="rounded bg-hover/30 overflow-hidden">
+                          {/* File header - click to expand/collapse */}
+                          <div
+                            onClick={() => toggleFileExpand(file.filePath)}
+                            className="flex items-center gap-2 text-xs p-1.5 cursor-pointer hover:bg-hover/50 transition-colors"
+                          >
+                            <span className="text-muted w-4">
+                              {expandedFiles.has(file.filePath) ? (
+                                <ChevronDownIcon />
+                              ) : (
+                                <ChevronRightIcon />
+                              )}
+                            </span>
+                            <span
+                              className={`font-mono flex-shrink-0 w-4 text-center ${
+                                file.status === 'added'
+                                  ? 'text-green-400'
+                                  : file.status === 'deleted'
+                                    ? 'text-red-400'
+                                    : file.status === 'renamed'
+                                      ? 'text-blue-400'
+                                      : 'text-yellow-400'
+                              }`}
+                            >
+                              {file.status === 'added'
+                                ? 'A'
+                                : file.status === 'deleted'
+                                  ? 'D'
+                                  : file.status === 'renamed'
+                                    ? 'R'
+                                    : 'M'}
+                            </span>
+                            <span className="flex-1 truncate font-mono">{file.filePath}</span>
+                            <span className="text-green-400 flex-shrink-0">+{file.additions}</span>
+                            <span className="text-red-400 flex-shrink-0">-{file.deletions}</span>
+                            {/* Open file button */}
+                            {file.status !== 'deleted' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleFileClick(file.filePath)
+                                }}
+                                className="text-muted hover:text-accent px-1"
+                                title={`Open ${file.filePath}`}
+                              >
+                                ↗
+                              </button>
+                            )}
+                          </div>
+
+                          {/* E-1: Inline diff hunks */}
+                          {expandedFiles.has(file.filePath) && file.hunks.length > 0 && (
+                            <div className="border-t border-default">
+                              <DiffHunkViewer hunks={file.hunks} maxHeight="250px" />
+                            </div>
+                          )}
+
+                          {/* Show message if no hunks available */}
+                          {expandedFiles.has(file.filePath) && file.hunks.length === 0 && (
+                            <div className="border-t border-default p-2 text-xs text-muted">
+                              {file.status === 'added'
+                                ? 'New file'
+                                : file.status === 'deleted'
+                                  ? 'File deleted'
+                                  : 'Binary file or no diff available'}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
+
                 {diffData?.branch === branch.name && diffData.files.length === 0 && (
                   <div className="mt-3 border-t border-default pt-3">
                     {diffData.error ? (
                       <p className="text-xs text-red-400">Error: {diffData.error}</p>
                     ) : (
-                      <p className="text-xs text-muted">No differences from main/master branch</p>
+                      <p className="text-xs text-muted">
+                        No differences from {diffData.baseBranch} branch
+                      </p>
                     )}
                   </div>
                 )}
@@ -471,6 +673,17 @@ export function AgentSessionsPanel({ workspacePath, onBranchChange }: AgentSessi
           branchName={deleteConfirm}
           onConfirm={handleDeleteConfirm}
           onCancel={handleDeleteCancel}
+        />
+      )}
+
+      {/* E-3: Merge preview dialog */}
+      {mergePreview && (
+        <MergePreviewDialog
+          sourceBranch={mergePreview.branch}
+          targetBranch={mergePreview.targetBranch}
+          workspacePath={workspacePath}
+          onConfirm={handleMergeConfirm}
+          onCancel={handleMergeCancel}
         />
       )}
     </div>

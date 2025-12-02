@@ -65,7 +65,8 @@ import {
   pushSetUpstream,
   pull,
   pullRebase,
-  fetchAll
+  fetchAll,
+  analyzeMerge
 } from './services/git-service'
 import {
   listConversations,
@@ -509,6 +510,19 @@ app.whenReady().then(() => {
       return { success: false, error: String(error) }
     }
   })
+
+  // E-3: Merge analysis for preview dialog
+  ipcMain.handle(
+    'git:analyze-merge',
+    async (_event, path: string, sourceBranch: string, targetBranch: string) => {
+      try {
+        const analysis = await analyzeMerge(path, sourceBranch, targetBranch)
+        return { success: true, data: analysis }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
 
   ipcMain.handle('git:delete-branch', async (_event, path: string, branchName: string, force?: boolean) => {
     try {

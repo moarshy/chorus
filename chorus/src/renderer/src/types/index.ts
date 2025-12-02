@@ -55,7 +55,8 @@ export type {
   GitBranchCreatedEvent,
   GitCommitCreatedEvent,
   DiffHunk,
-  FileDiff
+  FileDiff,
+  MergeAnalysis
 } from '../../../preload/index.d'
 
 // UI-specific types

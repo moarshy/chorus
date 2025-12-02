@@ -415,6 +415,15 @@ interface GitCommitCreatedEvent {
   type: 'turn' | 'stop'
 }
 
+// Merge analysis result for preview dialog (E-3)
+interface MergeAnalysis {
+  canMerge: boolean
+  behindCount: number
+  conflictFiles: string[]
+  changedFiles: FileDiff[]
+  error?: string
+}
+
 // ============================================
 // Conversation Settings Types
 // ============================================
@@ -514,6 +523,7 @@ interface GitAPI {
   getDiff: (path: string, commitHash?: string) => Promise<ApiResult<FileDiff[]>>
   getDiffBetweenBranches: (path: string, baseBranch: string, targetBranch: string) => Promise<ApiResult<FileDiff[]>>
   merge: (path: string, sourceBranch: string, options?: { squash?: boolean }) => Promise<ApiResult>
+  analyzeMerge: (path: string, sourceBranch: string, targetBranch: string) => Promise<ApiResult<MergeAnalysis>>
   deleteBranch: (path: string, branchName: string, force?: boolean) => Promise<ApiResult>
   branchExists: (path: string, branchName: string) => Promise<ApiResult<boolean>>
   getAgentBranches: (path: string) => Promise<ApiResult<AgentBranchInfo[]>>
@@ -633,6 +643,7 @@ export type {
   AgentBranchInfo,
   GitBranchCreatedEvent,
   GitCommitCreatedEvent,
+  MergeAnalysis,
   ApiResult,
   ContentBlock,
   ConversationMessage,

@@ -492,12 +492,9 @@ function parseDiff(diffOutput: string): FileDiff[] {
  * Get structured diff with file-level breakdown
  */
 export async function getStructuredDiff(path: string, commitHash?: string): Promise<FileDiff[]> {
-  try {
-    const diff = await getDiff(path, commitHash)
-    return parseDiff(diff)
-  } catch {
-    return []
-  }
+  // Let errors propagate so the caller can handle them properly
+  const diff = await getDiff(path, commitHash)
+  return parseDiff(diff)
 }
 
 /**
@@ -508,12 +505,9 @@ export async function getStructuredDiffBetweenBranches(
   baseBranch: string,
   targetBranch: string
 ): Promise<FileDiff[]> {
-  try {
-    const diff = await getDiffBetweenBranches(path, baseBranch, targetBranch)
-    return parseDiff(diff)
-  } catch {
-    return []
-  }
+  // Let errors propagate so the caller can handle them properly
+  const diff = await getDiffBetweenBranches(path, baseBranch, targetBranch)
+  return parseDiff(diff)
 }
 
 /**
@@ -630,10 +624,15 @@ export async function push(
   options?: { setUpstream?: boolean; force?: boolean }
 ): Promise<void> {
   let args = 'push'
-  if (options?.setUpstream) args += ' -u origin'
+  if (options?.setUpstream) {
+    // -u sets upstream tracking; specify origin and branch
+    args += ` -u origin ${branchName || ''}`
+  } else if (branchName) {
+    // Push specific branch to origin
+    args += ` origin ${branchName}`
+  }
   if (options?.force) args += ' --force'
-  if (branchName) args += ` origin ${branchName}`
-  runGit(path, args)
+  runGit(path, args.trim())
 }
 
 /**
@@ -828,5 +827,102 @@ export async function hasRemotes(path: string): Promise<boolean> {
     return output.length > 0
   } catch {
     return false
+  }
+}
+
+// ============================================================================
+// Merge Analysis Functions (E-3)
+// ============================================================================
+
+/**
+ * Get count of commits that target branch has ahead of source
+ * Used to show "main has X new commits since branch was created"
+ */
+export async function getCommitsBehind(
+  path: string,
+  sourceBranch: string,
+  targetBranch: string
+): Promise<number> {
+  try {
+    // Count commits in target that aren't in source
+    const output = runGit(path, `rev-list --count ${sourceBranch}..${targetBranch}`)
+    return parseInt(output, 10) || 0
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * Check for files that are modified in both branches (potential conflicts)
+ * Returns list of file paths that might conflict during merge
+ */
+export async function checkMergeConflicts(
+  path: string,
+  sourceBranch: string,
+  targetBranch: string
+): Promise<string[]> {
+  try {
+    // Get merge base (common ancestor)
+    const mergeBase = runGit(path, `merge-base ${sourceBranch} ${targetBranch}`)
+
+    // Files changed in source since merge base
+    const sourceFilesOutput = runGit(path, `diff --name-only ${mergeBase} ${sourceBranch}`)
+    const sourceFiles = sourceFilesOutput.split('\n').filter(Boolean)
+
+    // Files changed in target since merge base
+    const targetFilesOutput = runGit(path, `diff --name-only ${mergeBase} ${targetBranch}`)
+    const targetFiles = targetFilesOutput.split('\n').filter(Boolean)
+
+    // Intersection = files modified in both branches = potential conflicts
+    return sourceFiles.filter((f) => targetFiles.includes(f))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Merge analysis result for preview
+ */
+export interface MergeAnalysis {
+  canMerge: boolean
+  behindCount: number // How many commits target is ahead
+  conflictFiles: string[] // Files modified in both branches
+  changedFiles: FileDiff[] // Files that will be merged
+  error?: string
+}
+
+/**
+ * Analyze a potential merge without performing it
+ * Used for merge preview dialog
+ */
+export async function analyzeMerge(
+  path: string,
+  sourceBranch: string,
+  targetBranch: string
+): Promise<MergeAnalysis> {
+  try {
+    // Get how far behind the source is from target
+    const behindCount = await getCommitsBehind(path, sourceBranch, targetBranch)
+
+    // Check for potential conflicts
+    const conflictFiles = await checkMergeConflicts(path, sourceBranch, targetBranch)
+
+    // Get the files that will be merged (diff from target to source)
+    const changedFiles = await getStructuredDiffBetweenBranches(path, targetBranch, sourceBranch)
+
+    return {
+      canMerge: true,
+      behindCount,
+      conflictFiles,
+      changedFiles
+    }
+  } catch (error) {
+    return {
+      canMerge: false,
+      behindCount: 0,
+      conflictFiles: [],
+      changedFiles: [],
+      error: String(error)
+    }
   }
 }

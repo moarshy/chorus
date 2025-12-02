@@ -138,6 +138,8 @@ const api = {
       ipcRenderer.invoke('git:get-diff-between-branches', path, baseBranch, targetBranch),
     merge: (path: string, sourceBranch: string, options?: { squash?: boolean }) =>
       ipcRenderer.invoke('git:merge', path, sourceBranch, options),
+    analyzeMerge: (path: string, sourceBranch: string, targetBranch: string) =>
+      ipcRenderer.invoke('git:analyze-merge', path, sourceBranch, targetBranch),
     deleteBranch: (path: string, branchName: string, force?: boolean) =>
       ipcRenderer.invoke('git:delete-branch', path, branchName, force),
     branchExists: (path: string, branchName: string) =>
