@@ -624,11 +624,15 @@ export function isBranchCheckedOut(path: string, branchName: string): string | n
 /**
  * Delete a branch
  * Returns { deleted: boolean, reason?: string } to indicate success or why it was skipped
+ * When force=true and branch is in a worktree, the worktree is removed first
  */
 export async function deleteBranch(path: string, branchName: string, force?: boolean): Promise<{ deleted: boolean; reason?: string }> {
+  console.log(`[Git] deleteBranch called: path=${path}, branch=${branchName}, force=${force}`)
+
   // Check if branch exists first
   const exists = await branchExists(path, branchName)
   if (!exists) {
+    console.log(`[Git] Branch ${branchName} does not exist in ${path}`)
     return {
       deleted: false,
       reason: `Branch does not exist`
@@ -638,14 +642,30 @@ export async function deleteBranch(path: string, branchName: string, force?: boo
   // Check if branch is checked out in any worktree
   const checkedOutIn = isBranchCheckedOut(path, branchName)
   if (checkedOutIn) {
-    return {
-      deleted: false,
-      reason: `Branch is checked out in worktree: ${checkedOutIn}`
+    if (force) {
+      // Force delete: remove the worktree first, then delete the branch
+      console.log(`[Git] Branch ${branchName} is checked out in worktree ${checkedOutIn}, removing worktree first`)
+      try {
+        await removeWorktree(path, checkedOutIn, true)
+        console.log(`[Git] Worktree ${checkedOutIn} removed`)
+      } catch (error) {
+        console.error(`[Git] Failed to remove worktree ${checkedOutIn}:`, error)
+        return {
+          deleted: false,
+          reason: `Failed to remove worktree: ${error}`
+        }
+      }
+    } else {
+      return {
+        deleted: false,
+        reason: `Branch is checked out in worktree: ${checkedOutIn}`
+      }
     }
   }
 
   const flag = force ? '-D' : '-d'
   runGit(path, `branch ${flag} ${branchName}`)
+  console.log(`[Git] Branch ${branchName} deleted`)
   return { deleted: true }
 }
 

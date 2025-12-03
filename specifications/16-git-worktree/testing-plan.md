@@ -98,30 +98,90 @@ This document outlines the testing strategy for verifying git worktree integrati
 - [ ] Verify agent creates branch in main repo (legacy behavior)
 - [ ] Verify file changes happen in main repo working directory
 
-### 7. Error Handling
+### 7. Auto-Commit with Worktrees
 
-**Test 7.1: Git Operations with Worktree**
+**Test 7.1: Auto-Commit Creates Commits in Worktree**
+- [ ] Ensure "Auto-commit after each conversation turn" is enabled
+- [ ] Start a new Claude agent conversation
+- [ ] Send a message that creates/modifies files
+- [ ] After agent completes, run in worktree: `git log --oneline -5`
+- [ ] Verify commit was created with message including the prompt
+- [ ] Verify commit is on the agent branch, NOT main
+
+**Test 7.2: Auto-Commit for OpenAI Research**
+- [ ] Ensure "Auto-commit" is enabled
+- [ ] Start a new Deep Research conversation
+- [ ] Wait for research to complete
+- [ ] Run in worktree: `git log --oneline -5`
+- [ ] Verify commit was created with "[Deep Research]" prefix
+- [ ] Verify research output file is included in commit
+
+**Test 7.3: Console Logging**
+- [ ] Check Electron dev tools console during agent execution
+- [ ] Verify no "No branch for this conversation" warnings
+- [ ] Verify commit success message shows hash
+
+### 8. Agent Sessions Panel
+
+**Test 8.1: Sessions Panel Visibility**
+- [ ] Open Workspace Overview (click workspace name in sidebar)
+- [ ] Go to "Overview" tab (not Settings)
+- [ ] Verify "Agent Sessions" section appears if agent branches exist
+- [ ] Verify count shows correctly (e.g., "Agent Sessions (2)")
+
+**Test 8.2: Session Actions**
+- [ ] Expand an agent session
+- [ ] Verify "Checkout", "View Changes", "Push", "Merge", "Delete" buttons work
+- [ ] Click "View Changes" and verify diff is shown
+
+### 9. Error Handling
+
+**Test 9.1: Git Operations with Worktree**
 - [ ] Create file changes via agent
 - [ ] Run `git status` in worktree - verify changes shown
 - [ ] Verify auto-commit works correctly (if enabled)
 - [ ] Check commit appears on worktree branch
 
-**Test 7.2: Worktree Cleanup**
+**Test 9.2: Worktree Cleanup**
 - [ ] Delete a conversation that has a worktree
 - [ ] Verify worktree directory still exists (manual cleanup expected)
 - [ ] Future: Verify "Prune worktrees" functionality (if implemented)
 
-### 8. Edge Cases
+### 10. Edge Cases
 
-**Test 8.1: Repo Without .gitignore**
+**Test 10.1: Repo Without .gitignore**
 - [ ] Test with a repo that has no .gitignore
 - [ ] Start agent conversation
 - [ ] Verify `.gitignore` is created with `.chorus-worktrees/` entry
 
-**Test 8.2: Non-Git Directory**
+**Test 10.2: Non-Git Directory**
 - [ ] Create workspace pointing to non-git directory
 - [ ] Attempt to enable worktrees
 - [ ] Verify graceful failure (falls back to standard execution)
+
+**Test 10.3: Delete Branch with Active Worktree**
+- [ ] Create agent conversation (worktree + branch created)
+- [ ] Try to delete the agent branch from Branch list
+- [ ] Verify worktree is automatically removed first
+- [ ] Verify branch is successfully deleted
+- [ ] Verify conversation is cascade-deleted
+
+**Test 10.4: Delete Branch from AgentSessionsPanel**
+- [ ] Open Workspace Overview > Overview tab
+- [ ] Find an agent session and click Delete
+- [ ] Verify deletion succeeds (worktree removed, branch deleted)
+- [ ] Verify session disappears from the panel
+
+**Test 10.5: Delete Branch from BranchSelector (Sidebar)**
+- [ ] Click the branch dropdown in the sidebar
+- [ ] Find an agent branch and click the delete icon
+- [ ] Verify deletion succeeds
+- [ ] Verify branch no longer appears in the list
+
+**Test 10.6: Worktree Directory Cleanup**
+- [ ] After deleting an agent branch
+- [ ] Verify `.chorus-worktrees/{conversationId}/` directory is removed
+- [ ] Run `git worktree list` to confirm worktree is gone
 
 ## Verification Commands
 
