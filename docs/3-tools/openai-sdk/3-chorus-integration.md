@@ -1,8 +1,10 @@
 # Chorus Integration
 
-This document details how to integrate OpenAI Deep Research into the Chorus application alongside the existing Claude Code agent.
+This document details how the OpenAI Deep Research agent integrates into Chorus as a built-in agent alongside the existing Chorus (Claude) agent.
 
 ## Architecture Overview
+
+Deep Research is a built-in agent that appears in every workspace's agent list, similar to the Chorus agent. When selected, it uses the OpenAI Agents SDK instead of the Claude Agent SDK.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -10,14 +12,17 @@ This document details how to integrate OpenAI Deep Research into the Chorus appl
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐ │
 │  │                      Renderer Process                           │ │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │ │
-│  │  │ Agent Type   │  │ Model        │  │ ConversationToolbar  │  │ │
-│  │  │ Selector     │  │ Dropdown     │  │ (dynamic models)     │  │ │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────┘  │ │
 │  │                                                                 │ │
-│  │  ┌──────────────────────────────────────────────────────────┐  │ │
-│  │  │ ChatPane - unified message display, streaming            │  │ │
-│  │  └──────────────────────────────────────────────────────────┘  │ │
+│  │  ┌──────────────┐  ┌──────────────────────────────────────┐    │ │
+│  │  │ Sidebar      │  │ MainPane                              │    │ │
+│  │  │              │  │                                       │    │ │
+│  │  │ Agents:      │  │ ConversationToolbar                   │    │ │
+│  │  │ 🎵 Chorus    │  │ ┌─────────────────────────────────┐   │    │ │
+│  │  │ 🔬 Deep Res. │◄─┼─│ Model: [O4 Mini ▼]              │   │    │ │
+│  │  │ ──────────── │  │ └─────────────────────────────────┘   │    │ │
+│  │  │ 📄 custom... │  │                                       │    │ │
+│  │  └──────────────┘  │ ChatPane (streaming, messages)        │    │ │
+│  │                    └──────────────────────────────────────┘    │ │
 │  └─────────────────────────────────┬──────────────────────────────┘ │
 │                                    │ IPC Bridge                     │
 │  ┌─────────────────────────────────┼──────────────────────────────┐ │
@@ -26,18 +31,18 @@ This document details how to integrate OpenAI Deep Research into the Chorus appl
 │  │  ┌──────────────────────────────────────────────────────────┐  │ │
 │  │  │               agent-service.ts (Router)                   │  │ │
 │  │  │                                                           │  │ │
-│  │  │   if (agentType === 'claude') → agent-sdk-service.ts     │  │ │
-│  │  │   if (agentType === 'openai-research') → agent-openai.ts │  │ │
+│  │  │   if (agent.type === 'claude') → agent-sdk-service.ts    │  │ │
+│  │  │   if (agent.type === 'openai-research') → openai-svc.ts  │  │ │
 │  │  └───────────────────────┬───────────────────────────────────┘  │ │
 │  │                          │                                      │ │
 │  │     ┌────────────────────┴────────────────────┐                │ │
 │  │     │                                          │                │ │
 │  │     ▼                                          ▼                │ │
 │  │  ┌─────────────────────┐  ┌─────────────────────────────────┐  │ │
-│  │  │ agent-sdk-service   │  │ agent-openai-research-service   │  │ │
+│  │  │ agent-sdk-service   │  │ openai-research-service         │  │ │
 │  │  │                     │  │                                 │  │ │
 │  │  │ @anthropic-ai/      │  │ @openai/agents                  │  │ │
-│  │  │ claude-agent-sdk    │  │ + openai                        │  │ │
+│  │  │ claude-agent-sdk    │  │ + WebSearchTool                 │  │ │
 │  │  └──────────┬──────────┘  └──────────┬──────────────────────┘  │ │
 │  │             │                        │                          │ │
 │  └─────────────┼────────────────────────┼──────────────────────────┘ │
@@ -51,702 +56,437 @@ This document details how to integrate OpenAI Deep Research into the Chorus appl
           └────────────┘           └────────────┘
 ```
 
-## Data Model Changes
+## Built-in Agents
 
-### Agent Type Field
+Chorus provides two built-in agents per workspace:
 
-Add `agentType` to conversation model:
+| Agent | Type | SDK | Purpose |
+|-------|------|-----|---------|
+| **Chorus** | `claude` | Claude Agent SDK | Coding tasks, file editing, terminal |
+| **Deep Research** | `openai-research` | OpenAI Agents SDK | Multi-step research, web search |
+
+```typescript
+// chorus/src/main/services/workspace-service.ts
+
+const BUILT_IN_AGENTS: Agent[] = [
+  {
+    id: 'chorus',
+    name: 'Chorus',
+    type: 'claude',
+    description: 'General-purpose coding assistant'
+  },
+  {
+    id: 'deep-research',
+    name: 'Deep Research',
+    type: 'openai-research',
+    description: 'OpenAI Deep Research for comprehensive analysis'
+  }
+];
+```
+
+## Agent Type System
+
+The `AgentType` field determines which backend service handles the conversation:
 
 ```typescript
 // chorus/src/preload/index.d.ts
 
-export type AgentType = 'claude' | 'openai-research'
+type AgentType = 'claude' | 'openai-research';
 
-export interface Conversation {
-  id: string
-  agentId: string
-  workspaceId: string
-  title: string
-  createdAt: string
-  updatedAt: string
-  sessionId: string | null
-  sessionCreatedAt: string | null
-  agentType: AgentType  // NEW
-  settings?: ConversationSettings
-}
-
-export interface ConversationSettings {
-  permissionMode?: PermissionMode
-  allowedTools?: string[]
-  model?: string  // Extended to include OpenAI models
+interface Agent {
+  id: string;
+  name: string;
+  type: AgentType;
+  description?: string;
+  filePath?: string;       // Only for custom .claude/agents/*.md
+  systemPrompt?: string;   // Only for custom agents
 }
 ```
 
-### Model Configuration
+## Model Configuration
+
+Each agent type has its own set of available models:
+
+```typescript
+// chorus/src/renderer/src/constants/models.ts
+
+export const CLAUDE_MODELS = [
+  { id: 'claude-sonnet-4-5-20250929', name: 'Sonnet 4.5', default: true },
+  { id: 'claude-opus-4-0-20250514', name: 'Opus 4' },
+  { id: 'claude-sonnet-4-20250514', name: 'Sonnet 4' },
+];
+
+export const OPENAI_RESEARCH_MODELS = [
+  { id: 'o4-mini-deep-research-2025-06-26', name: 'O4 Mini (faster)', default: true },
+  { id: 'o3-deep-research-2025-06-26', name: 'O3 (thorough)' },
+];
+
+export function getModelsForAgentType(type: AgentType) {
+  return type === 'openai-research' ? OPENAI_RESEARCH_MODELS : CLAUDE_MODELS;
+}
+```
+
+The `ConversationToolbar` dynamically switches model options based on the agent type:
 
 ```typescript
 // chorus/src/renderer/src/components/Chat/ConversationToolbar.tsx
 
-export const CLAUDE_MODELS = [
-  { id: 'default', name: 'Default', description: 'Sonnet 4.5 - Recommended' },
-  { id: 'opus', name: 'Opus', description: 'Opus 4.5 - Most capable' },
-  { id: 'sonnet', name: 'Sonnet (1M)', description: 'Sonnet 4.5 - Long context' },
-  { id: 'haiku', name: 'Haiku', description: 'Haiku 4.5 - Fastest' }
-] as const
+function ModelSelector({ conversation, agent }) {
+  const models = getModelsForAgentType(agent.type);
 
-export const OPENAI_RESEARCH_MODELS = [
-  { id: 'o4-mini-research', name: 'o4-mini', description: 'Fast deep research' },
-  { id: 'o3-research', name: 'o3', description: 'Full deep research' }
-] as const
-
-export type ClaudeModel = typeof CLAUDE_MODELS[number]['id']
-export type OpenAIResearchModel = typeof OPENAI_RESEARCH_MODELS[number]['id']
-```
-
-## Implementation Plan
-
-### Phase 1: Data Layer
-
-**Files to modify:**
-
-| File | Changes |
-|------|---------|
-| `chorus/src/preload/index.d.ts` | Add `AgentType`, update `Conversation` interface |
-| `chorus/src/main/services/conversation-service.ts` | Store/load `agentType` |
-| `chorus/src/renderer/src/stores/workspace-store.ts` | Track agent type per conversation |
-
-**Example changes:**
-
-```typescript
-// conversation-service.ts
-
-export function createConversation(
-  agentId: string,
-  workspaceId: string,
-  agentType: AgentType = 'claude'  // Default to Claude
-): Conversation {
-  const conversation: Conversation = {
-    id: uuidv4(),
-    agentId,
-    workspaceId,
-    title: 'New Conversation',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    sessionId: null,
-    sessionCreatedAt: null,
-    agentType,  // NEW
-    settings: {}
-  }
-  // ...
+  return (
+    <select value={conversation.settings?.model || models[0].id}>
+      {models.map((model) => (
+        <option key={model.id} value={model.id}>{model.name}</option>
+      ))}
+    </select>
+  );
 }
 ```
 
-### Phase 2: OpenAI Research Service
+## Settings Configuration
 
-**New file:** `chorus/src/main/services/agent-openai-research-service.ts`
+### API Key Setup
+
+OpenAI API key is configured in a dedicated Settings tab:
 
 ```typescript
-import { Agent, run, WebSearchTool } from '@openai/agents'
-import OpenAI from 'openai'
-import { BrowserWindow } from 'electron'
-import { v4 as uuidv4 } from 'uuid'
-import path from 'path'
-import fs from 'fs/promises'
-import { ConversationSettings, ConversationMessage } from './conversation-service'
-import { appendMessage, updateConversation } from './conversation-service'
+// chorus/src/renderer/src/components/Settings/SettingsPage.tsx
 
-// Active streams for cancellation
-const activeStreams = new Map<string, AbortController>()
+export function SettingsPage() {
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [keyStatus, setKeyStatus] = useState<'valid' | 'invalid' | 'not-set'>('not-set');
 
-// Model ID mapping
-const MODEL_IDS: Record<string, string> = {
-  'o4-mini-research': 'o4-mini-deep-research-2025-06-26',
-  'o3-research': 'o3-deep-research-2025-06-26'
-}
+  const handleKeyChange = async (key: string) => {
+    const result = await window.api.settings.setOpenaiKey(key);
+    setKeyStatus(result.valid ? 'valid' : 'invalid');
+  };
 
-export async function sendResearchMessage(
-  conversationId: string,
-  repoPath: string,
-  message: string,
-  mainWindow: BrowserWindow,
-  settings?: ConversationSettings
-): Promise<void> {
-  // Cancel any existing stream
-  const existingController = activeStreams.get(conversationId)
-  if (existingController) {
-    existingController.abort()
-  }
-
-  const controller = new AbortController()
-  activeStreams.set(conversationId, controller)
-
-  // Send busy status
-  mainWindow.webContents.send('agent:status', {
-    conversationId,
-    status: 'busy'
-  })
-
-  try {
-    // Store user message
-    const userMessage: ConversationMessage = {
-      uuid: uuidv4(),
-      type: 'user',
-      content: message,
-      timestamp: new Date().toISOString()
-    }
-    appendMessage(conversationId, userMessage)
-    mainWindow.webContents.send('agent:message', {
-      conversationId,
-      message: userMessage
-    })
-
-    // Configure model
-    const modelId = MODEL_IDS[settings?.model || 'o4-mini-research']
-      || MODEL_IDS['o4-mini-research']
-
-    // Create research agent
-    const researchAgent = new Agent({
-      name: 'Research Agent',
-      model: modelId,
-      tools: [new WebSearchTool()],
-      instructions: `You perform deep empirical research.
-
-        Research methodology:
-        - Search multiple authoritative sources
-        - Cross-reference information for accuracy
-        - Provide citations for all claims
-        - Synthesize findings into actionable insights
-
-        Output format:
-        - Use markdown formatting
-        - Include sources with URLs
-        - Highlight key findings`
-    })
-
-    // Run with streaming
-    const stream = await run(researchAgent, message, {
-      stream: true,
-      signal: controller.signal
-    })
-
-    let streamingContent = ''
-    let toolCalls: Array<{ name: string; input: unknown }> = []
-
-    // Process stream events
-    for await (const event of stream) {
-      // Handle text deltas
-      if (event.type === 'raw_model_stream_event') {
-        const delta = event.data?.delta
-        if (delta?.type === 'text_delta' && delta.text) {
-          streamingContent += delta.text
-          mainWindow.webContents.send('agent:stream-delta', {
-            conversationId,
-            delta: delta.text
-          })
-        }
-      }
-
-      // Handle tool events
-      if (event.type === 'run_item_stream_event') {
-        if (event.name === 'tool_called') {
-          toolCalls.push({
-            name: event.item.name,
-            input: event.item.input
-          })
-          mainWindow.webContents.send('agent:tool-use', {
-            conversationId,
-            tool: event.item.name,
-            input: event.item.input,
-            status: 'running'
-          })
-        }
-
-        if (event.name === 'tool_output') {
-          mainWindow.webContents.send('agent:tool-result', {
-            conversationId,
-            output: event.item.output,
-            status: 'complete'
-          })
-        }
-      }
-    }
-
-    await stream.completed
-
-    // Clear streaming state
-    mainWindow.webContents.send('agent:stream-clear', { conversationId })
-
-    // Store assistant message
-    const assistantMessage: ConversationMessage = {
-      uuid: uuidv4(),
-      type: 'assistant',
-      content: stream.finalOutput || streamingContent,
-      timestamp: new Date().toISOString(),
-      toolCalls
-    }
-    appendMessage(conversationId, assistantMessage)
-    mainWindow.webContents.send('agent:message', {
-      conversationId,
-      message: assistantMessage
-    })
-
-    // Auto-save research output
-    if (stream.finalOutput) {
-      const savedPath = await saveResearchOutput(
-        repoPath,
-        message,
-        stream.finalOutput
-      )
-      mainWindow.webContents.send('agent:file-changed', {
-        conversationId,
-        filePath: savedPath,
-        toolName: 'ResearchSave'
-      })
-    }
-
-    // Send ready status
-    mainWindow.webContents.send('agent:status', {
-      conversationId,
-      status: 'ready'
-    })
-
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      mainWindow.webContents.send('agent:status', {
-        conversationId,
-        status: 'ready'
-      })
-    } else {
-      mainWindow.webContents.send('agent:status', {
-        conversationId,
-        status: 'error',
-        error: error.message
-      })
-      mainWindow.webContents.send('agent:error', {
-        conversationId,
-        error: error.message
-      })
-    }
-  } finally {
-    activeStreams.delete(conversationId)
-  }
-}
-
-export function stopResearchAgent(conversationId: string): void {
-  const controller = activeStreams.get(conversationId)
-  if (controller) {
-    controller.abort()
-    activeStreams.delete(conversationId)
-  }
-}
-
-async function saveResearchOutput(
-  repoPath: string,
-  query: string,
-  content: string
-): Promise<string> {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const slug = query
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 50)
-
-  const filename = `${timestamp}-${slug}.md`
-  const researchDir = path.join(repoPath, 'research')
-  const fullPath = path.join(researchDir, filename)
-
-  // Ensure research directory exists
-  await fs.mkdir(researchDir, { recursive: true })
-
-  // Write research output
-  const fileContent = `# Research: ${query}
-
-Generated: ${new Date().toISOString()}
-Model: OpenAI Deep Research
-
----
-
-${content}
-`
-
-  await fs.writeFile(fullPath, fileContent, 'utf-8')
-
-  return `research/${filename}`
+  return (
+    <section>
+      <h2>API Keys</h2>
+      <label>OpenAI API Key</label>
+      <input
+        type="password"
+        value={openaiKey}
+        onChange={(e) => handleKeyChange(e.target.value)}
+        placeholder="sk-..."
+      />
+      <span>{keyStatus === 'valid' ? '✓ Valid' : keyStatus === 'invalid' ? '✗ Invalid' : ''}</span>
+    </section>
+  );
 }
 ```
 
-### Phase 3: Agent Service Router
+### Research Output Directory
 
-**Modify:** `chorus/src/main/services/agent-service.ts`
+Per-workspace setting for where research reports are saved:
 
 ```typescript
-import { sendMessageSDK, stopAgentSDK } from './agent-sdk-service'
-import { sendResearchMessage, stopResearchAgent } from './agent-openai-research-service'
-import type { AgentType, ConversationSettings } from '../../preload/index.d'
-import { BrowserWindow } from 'electron'
+interface ChorusSettings {
+  openaiApiKey?: string;
+  researchOutputDirectory: string;  // Default: './research'
+}
+```
+
+## OpenAI Research Service
+
+The research service handles communication with OpenAI's Deep Research models:
+
+```typescript
+// chorus/src/main/services/openai-research-service.ts
+
+import { Agent, run, WebSearchTool } from '@openai/agents';
+import OpenAI from 'openai';
+import { setDefaultOpenAIClient } from '@openai/agents';
 
 export async function sendMessage(
   conversationId: string,
-  agentId: string,
-  repoPath: string,
+  workspaceId: string,
   message: string,
-  sessionId: string | null,
-  sessionCreatedAt: string | null,
-  agentFilePath: string | null,
-  mainWindow: BrowserWindow,
-  settings?: ConversationSettings,
-  gitSettings?: unknown,
-  agentType: AgentType = 'claude'  // NEW parameter
-): Promise<void> {
-
-  if (agentType === 'openai-research') {
-    return sendResearchMessage(
-      conversationId,
-      repoPath,
-      message,
-      mainWindow,
-      settings
-    )
-  }
-
-  // Default: Claude Code
-  return sendMessageSDK(
-    conversationId,
-    agentId,
-    repoPath,
-    message,
-    sessionId,
-    sessionCreatedAt,
-    agentFilePath,
-    mainWindow,
-    settings,
-    gitSettings
-  )
-}
-
-export async function stopAgent(
-  conversationId: string,
-  agentType: AgentType = 'claude'
-): Promise<void> {
-  if (agentType === 'openai-research') {
-    return stopResearchAgent(conversationId)
-  }
-  return stopAgentSDK(conversationId)
-}
-```
-
-### Phase 4: IPC Handler Updates
-
-**Modify:** `chorus/src/main/index.ts`
-
-```typescript
-ipcMain.handle(
-  'agent:send',
-  async (
-    _event,
-    conversationId: string,
-    message: string,
-    repoPath: string,
-    _sessionId?: string,
-    agentFilePath?: string
-  ) => {
-    const { data } = await (async () => {
-      const result = loadConversation(conversationId)
-      return { data: result }
-    })()
-
-    const agentId = data?.conversation?.agentId || conversationId
-    const sessionId = data?.conversation?.sessionId || null
-    const sessionCreatedAt = data?.conversation?.sessionCreatedAt || null
-    const settings = data?.conversation?.settings
-    const workspaceId = data?.conversation?.workspaceId
-    const agentType = data?.conversation?.agentType || 'claude'  // NEW
-
-    const gitSettings = workspaceId
-      ? getWorkspaceSettings(workspaceId).git
-      : undefined
-
-    sendMessage(
-      conversationId,
-      agentId,
-      repoPath,
-      message,
-      sessionId,
-      sessionCreatedAt,
-      agentFilePath || null,
-      mainWindow,
-      settings,
-      gitSettings,
-      agentType  // NEW
-    )
-
-    return { success: true }
-  }
-)
-```
-
-### Phase 5: UI Changes
-
-**Modify:** `chorus/src/renderer/src/components/Chat/ConversationToolbar.tsx`
-
-```typescript
-import { AgentType, CLAUDE_MODELS, OPENAI_RESEARCH_MODELS } from '../../types'
-
-interface Props {
-  conversationId: string
-  agentType: AgentType
-}
-
-export function ConversationToolbar({ conversationId, agentType }: Props) {
-  // Dynamic model list based on agent type
-  const models = agentType === 'claude'
-    ? CLAUDE_MODELS
-    : OPENAI_RESEARCH_MODELS
-
-  const currentModel = useConversationSetting(conversationId, 'model')
-
-  return (
-    <div className="conversation-toolbar">
-      {/* Model dropdown */}
-      <Dropdown
-        value={currentModel || models[0].id}
-        options={models}
-        onChange={handleModelChange}
-        label="Model"
-      />
-
-      {/* Permission dropdown - only for Claude */}
-      {agentType === 'claude' && (
-        <Dropdown
-          value={permissionMode}
-          options={PERMISSION_MODES}
-          onChange={handlePermissionChange}
-          label="Permissions"
-        />
-      )}
-
-      {/* Research indicator */}
-      {agentType === 'openai-research' && (
-        <span className="research-badge">
-          Deep Research
-        </span>
-      )}
-    </div>
-  )
-}
-```
-
-**New component:** Agent type selector for new conversations
-
-```typescript
-// chorus/src/renderer/src/components/Chat/AgentTypeSelector.tsx
-
-import { AgentType } from '../../types'
-
-const AGENT_TYPES = [
-  {
-    id: 'claude' as AgentType,
-    name: 'Claude Code',
-    description: 'Coding tasks, file editing, terminal commands',
-    icon: (
-      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-      </svg>
-    )
+  options: {
+    model: string;
+    apiKey: string;
+    outputDir: string;
+    previousContext?: string;
   },
-  {
-    id: 'openai-research' as AgentType,
-    name: 'Deep Research',
-    description: 'Multi-step research, web search, synthesis',
-    icon: (
-      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-    )
+  mainWindow: BrowserWindow
+): Promise<void> {
+  const controller = new AbortController();
+  activeSessions.set(conversationId, controller);
+
+  // Configure OpenAI client with extended timeout
+  const client = new OpenAI({
+    apiKey: options.apiKey,
+    timeout: 600000,  // 10 minutes for deep research
+  });
+  setDefaultOpenAIClient(client);
+
+  // Build prompt with context for follow-ups
+  const prompt = options.previousContext
+    ? `Previous research:\n\n${options.previousContext}\n\n---\n\nFollow-up question: ${message}`
+    : message;
+
+  // Create research agent
+  const agent = new Agent({
+    name: 'Deep Researcher',
+    model: options.model,
+    tools: [new WebSearchTool()],
+    instructions: `You perform deep empirical research.
+      - Search multiple authoritative sources
+      - Cross-reference information for accuracy
+      - Provide citations with URLs
+      - Synthesize into actionable insights`
+  });
+
+  // Stream research
+  const stream = await run(agent, prompt, {
+    stream: true,
+    signal: controller.signal
+  });
+
+  let fullText = '';
+
+  for await (const event of stream) {
+    // Handle text streaming
+    if (event.type === 'raw_model_stream_event') {
+      const delta = event.data?.delta;
+      if (delta?.type === 'text_delta' && delta.text) {
+        fullText += delta.text;
+        mainWindow.webContents.send('research:delta', {
+          conversationId,
+          text: delta.text
+        });
+      }
+    }
+
+    // Handle web searches
+    if (event.type === 'run_item_stream_event' && event.name === 'tool_called') {
+      mainWindow.webContents.send('research:search', {
+        conversationId,
+        query: event.item.input?.query
+      });
+    }
   }
-]
 
-interface Props {
-  selected: AgentType
-  onSelect: (type: AgentType) => void
-}
+  await stream.completed;
 
-export function AgentTypeSelector({ selected, onSelect }: Props) {
-  return (
-    <div className="agent-type-selector">
-      {AGENT_TYPES.map(type => (
-        <button
-          key={type.id}
-          className={`agent-type-option ${selected === type.id ? 'selected' : ''}`}
-          onClick={() => onSelect(type.id)}
-        >
-          {type.icon}
-          <div>
-            <div className="font-medium">{type.name}</div>
-            <div className="text-xs text-gray-500">{type.description}</div>
-          </div>
-        </button>
-      ))}
-    </div>
-  )
+  // Auto-save to output directory
+  const outputPath = await saveResearchOutput(workspaceId, options.outputDir, message, fullText);
+
+  mainWindow.webContents.send('research:complete', {
+    conversationId,
+    outputPath,
+    text: fullText
+  });
 }
 ```
 
-## Environment Configuration
+## Agent Service Router
 
-### Required Environment Variables
+The main agent service routes to the appropriate backend:
+
+```typescript
+// chorus/src/main/services/agent-service.ts
+
+import * as claudeService from './agent-sdk-service';
+import * as openaiService from './openai-research-service';
+
+export async function sendMessage(
+  conversationId: string,
+  workspaceId: string,
+  agentId: string,
+  message: string,
+  mainWindow: BrowserWindow
+): Promise<void> {
+  const agent = await getAgent(workspaceId, agentId);
+
+  if (agent.type === 'openai-research') {
+    const apiKey = store.get('openaiApiKey');
+    if (!apiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const outputDir = store.get('researchOutputDirectory', './research');
+    const previousContext = await getPreviousResearchContext(conversationId);
+
+    await openaiService.sendMessage(conversationId, workspaceId, message, {
+      model: conversation.settings?.model || 'o4-mini-deep-research-2025-06-26',
+      apiKey,
+      outputDir,
+      previousContext
+    }, mainWindow);
+  } else {
+    // Claude agent flow
+    await claudeService.sendMessage(...);
+  }
+}
+```
+
+## Follow-up Context
+
+Since OpenAI's API is stateless, follow-up questions inject previous research as context:
+
+```typescript
+async function getPreviousResearchContext(conversationId: string): Promise<string | undefined> {
+  const messages = await getConversationMessages(conversationId);
+
+  const assistantMessages = messages
+    .filter(m => m.role === 'assistant')
+    .map(m => m.content);
+
+  if (assistantMessages.length === 0) return undefined;
+
+  // Return last research output as context
+  return assistantMessages[assistantMessages.length - 1];
+}
+```
+
+When a follow-up is sent, the prompt becomes:
+
+```
+Previous research:
+
+[Full text of previous research report]
+
+---
+
+Follow-up question: [User's new question]
+```
+
+## IPC Events
+
+### Main → Renderer Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `research:delta` | `{ conversationId, text }` | Streaming text chunk |
+| `research:search` | `{ conversationId, query }` | Web search being performed |
+| `research:complete` | `{ conversationId, outputPath, text }` | Research finished |
+| `research:error` | `{ conversationId, error }` | Error occurred |
+
+### Renderer → Main Handlers
+
+| Handler | Signature | Description |
+|---------|-----------|-------------|
+| `settings:get-openai-key` | `() => string \| null` | Get stored API key |
+| `settings:set-openai-key` | `(key) => { valid }` | Set and validate key |
+| `research:stop` | `(conversationId) => void` | Cancel research |
+
+## Output File Format
+
+Research reports are auto-saved with timestamp and query slug:
+
+```
+research/
+├── 2025-12-03T14-30-00-electron-security-best-practices.md
+├── 2025-12-03T15-45-00-react-performance-optimization.md
+└── 2025-12-03T16-00-00-ai-agents-production.md
+```
+
+File content:
+
+```markdown
+# Research: [Original query]
+
+Generated: 2025-12-03T14:30:00.000Z
+Model: o4-mini-deep-research-2025-06-26
+
+---
+
+[Full research report content]
+```
+
+## UI Components
+
+### Agent List (Sidebar)
+
+```
+┌─────────────────────────────────┐
+│ my-project                       │
+│ main ▼                           │
+├─────────────────────────────────┤
+│ Agents                           │
+│                                  │
+│ 🎵 Chorus                        │  ← Built-in Claude agent
+│ 🔬 Deep Research                 │  ← Built-in OpenAI agent
+│ ─────────────────────────────── │
+│ 📄 backend-expert                │  ← Custom agents
+│ 📄 code-reviewer                 │
+└─────────────────────────────────┘
+```
+
+### Research Message Component
+
+```typescript
+// chorus/src/renderer/src/components/Chat/ResearchMessage.tsx
+
+export function ResearchMessage({ conversationId, isStreaming }: Props) {
+  const [text, setText] = useState('');
+  const [searches, setSearches] = useState<string[]>([]);
+  const [outputPath, setOutputPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubDelta = window.api.research.onDelta((data) => {
+      if (data.conversationId === conversationId) {
+        setText(prev => prev + data.text);
+      }
+    });
+
+    const unsubSearch = window.api.research.onSearch((data) => {
+      if (data.conversationId === conversationId) {
+        setSearches(prev => [...prev, data.query]);
+      }
+    });
+
+    // ... cleanup
+  }, [conversationId]);
+
+  return (
+    <div className="research-message">
+      {/* Search activity */}
+      {searches.map((query, i) => (
+        <div key={i}>🔍 Searching: {query}</div>
+      ))}
+
+      {/* Streaming content */}
+      <MarkdownContent content={text} />
+      {isStreaming && <span className="cursor">█</span>}
+
+      {/* Output path after completion */}
+      {outputPath && (
+        <div className="saved-to">
+          📄 Saved to: {outputPath}
+          <button onClick={() => openFile(outputPath)}>Open File</button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Comparison: Claude vs Deep Research
+
+| Aspect | Chorus (Claude) | Deep Research (OpenAI) |
+|--------|-----------------|------------------------|
+| **SDK** | `@anthropic-ai/claude-agent-sdk` | `@openai/agents` |
+| **Purpose** | Coding, file editing, terminal | Research, web search, synthesis |
+| **Session** | Persistent via `resume` | Stateless (context injection) |
+| **Models** | Sonnet, Opus, Haiku | O4 Mini, O3 |
+| **Tools** | File ops, bash, MCP | WebSearchTool |
+| **Output** | Chat + file edits | Chat + auto-saved report |
+| **Permissions** | `canUseTool` callback | Not applicable |
+
+## Dependencies
 
 ```bash
-# Anthropic (existing)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# OpenAI (new)
-OPENAI_API_KEY=sk-...
-```
-
-### Settings UI
-
-Add OpenAI API key configuration to workspace settings:
-
-```typescript
-// chorus/src/renderer/src/components/MainPane/WorkspaceSettings.tsx
-
-export function WorkspaceSettings() {
-  const [openaiKey, setOpenaiKey] = useState('')
-
-  return (
-    <div className="workspace-settings">
-      {/* Existing settings */}
-
-      <section>
-        <h3>OpenAI Configuration</h3>
-        <label>
-          API Key
-          <input
-            type="password"
-            value={openaiKey}
-            onChange={e => setOpenaiKey(e.target.value)}
-            placeholder="sk-..."
-          />
-        </label>
-        <p className="text-sm text-gray-500">
-          Required for Deep Research. Get a key from
-          <a href="https://platform.openai.com/api-keys" target="_blank">
-            OpenAI Dashboard
-          </a>
-        </p>
-      </section>
-    </div>
-  )
-}
-```
-
-## Testing Checklist
-
-### Unit Tests
-
-- [ ] `agent-openai-research-service.ts` - streaming, cancellation, error handling
-- [ ] `agent-service.ts` - routing based on agent type
-- [ ] `conversation-service.ts` - storing/loading agent type
-
-### Integration Tests
-
-- [ ] Create research conversation
-- [ ] Stream research results to UI
-- [ ] Cancel research mid-stream
-- [ ] Save research output to file
-- [ ] Switch between Claude and Research agents
-
-### E2E Tests
-
-- [ ] Full research flow: query → streaming → file save
-- [ ] Model selection persists across sessions
-- [ ] Error states display correctly
-
-## Cost Tracking
-
-Deep Research has different cost structure:
-
-```typescript
-// Add to conversation-service.ts
-
-export interface ResearchCost {
-  inputTokens: number
-  outputTokens: number
-  webSearches: number
-  totalCost: number  // USD
-}
-
-// Estimate based on OpenAI pricing
-function estimateResearchCost(result: StreamResult): ResearchCost {
-  const inputTokens = result.usage?.input_tokens || 0
-  const outputTokens = result.usage?.output_tokens || 0
-  const webSearches = result.toolCalls?.filter(t => t.name === 'web_search').length || 0
-
-  // Approximate pricing (check current rates)
-  const inputCost = inputTokens * 0.00001  // $0.01/1K
-  const outputCost = outputTokens * 0.00003  // $0.03/1K
-  const searchCost = webSearches * 0.001  // $0.001/search
-
-  return {
-    inputTokens,
-    outputTokens,
-    webSearches,
-    totalCost: inputCost + outputCost + searchCost
-  }
-}
-```
-
-## Future Enhancements
-
-### Multi-Agent Pipelines
-
-```typescript
-// Future: Triage → Research → Synthesis pipeline
-const pipeline = [
-  { agent: triageAgent, condition: 'always' },
-  { agent: researchAgent, condition: 'needsResearch' },
-  { agent: synthesisAgent, condition: 'always' }
-]
-```
-
-### MCP Integration
-
-```typescript
-// Future: Connect to internal file search via MCP
-import { HostedMCPTool } from '@openai/agents'
-
-const agent = new Agent({
-  tools: [
-    new WebSearchTool(),
-    new HostedMCPTool({
-      serverUrl: 'file://./mcp-server',
-      serverLabel: 'Internal Docs'
-    })
-  ]
-})
-```
-
-### Research Templates
-
-```typescript
-// Future: Pre-configured research templates
-const RESEARCH_TEMPLATES = {
-  'architecture-review': {
-    instructions: 'Analyze architectural patterns...',
-    outputFormat: 'ADR template'
-  },
-  'library-comparison': {
-    instructions: 'Compare libraries based on...',
-    outputFormat: 'Comparison matrix'
-  }
-}
+cd chorus && bun add @openai/agents openai zod@3
 ```
 
 ## References
 
-- [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/)
-- [Deep Research Cookbook](https://cookbook.openai.com/examples/deep_research_api/introduction_to_deep_research_api_agents)
-- [Chorus Architecture](../../../CLAUDE.md)
+- [OpenAI Agents SDK](https://github.com/openai/openai-agents-js)
+- [Deep Research Models](https://platform.openai.com/docs/models/o4-mini-deep-research)
+- [Feature Specification](../../../specifications/15-openai-deep-research/feature.md)
+- [Implementation Plan](../../../specifications/15-openai-deep-research/implementation-plan.md)
 - [Claude Agent SDK Integration](../claude-agent-sdk/0-overview.md)

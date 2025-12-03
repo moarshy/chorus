@@ -48,6 +48,9 @@ interface WorkspaceStore {
   // Unsaved files tracking (for tab indicators)
   unsavedFiles: Set<string>  // Set of file paths with unsaved changes
 
+  // Refresh keys for cross-component coordination
+  branchRefreshKey: number  // Increment to trigger branch list refresh
+
   // Actions
   loadWorkspaces: () => Promise<void>
   loadSettings: () => Promise<void>
@@ -94,6 +97,9 @@ interface WorkspaceStore {
   markFileUnsaved: (filePath: string) => void
   markFileSaved: (filePath: string) => void
   isFileUnsaved: (filePath: string) => boolean
+
+  // Refresh actions
+  triggerBranchRefresh: () => void
 }
 
 // Generate UUID for tabs
@@ -126,6 +132,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   // Unsaved files tracking
   unsavedFiles: new Set<string>(),
+
+  // Refresh keys
+  branchRefreshKey: 0,
 
   // Load all workspaces
   loadWorkspaces: async () => {
@@ -923,5 +932,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   isFileUnsaved: (filePath: string) => {
     return get().unsavedFiles.has(filePath)
+  },
+
+  // Trigger branch refresh across all components watching branchRefreshKey
+  triggerBranchRefresh: () => {
+    set({ branchRefreshKey: get().branchRefreshKey + 1 })
   }
 }))

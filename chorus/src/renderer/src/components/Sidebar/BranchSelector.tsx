@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useFileTreeStore } from '../../stores/file-tree-store'
+import { useChatStore } from '../../stores/chat-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
 
 interface GitBranch {
   name: string
@@ -171,6 +173,10 @@ export function BranchSelector({ currentBranch, workspacePath, workspaceId, onBr
       if (result.success) {
         // Reload branches
         await loadBranches()
+        // Trigger conversation refresh since branch deletion may have cascade-deleted conversations
+        useChatStore.getState().triggerConversationRefresh()
+        // Trigger branch refresh so other branch components also update
+        useWorkspaceStore.getState().triggerBranchRefresh()
       } else {
         setError(result.error || 'Failed to delete branch')
       }

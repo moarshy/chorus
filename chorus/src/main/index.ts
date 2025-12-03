@@ -17,7 +17,11 @@ import {
   setWorkspaceSettings,
   hasWorkspaceSettings,
   WorkspaceSettings,
-  OpenTabsState
+  OpenTabsState,
+  getOpenAIApiKey,
+  setOpenAIApiKey,
+  getResearchOutputDirectory,
+  setResearchOutputDirectory
 } from './store'
 
 // Import services
@@ -88,6 +92,7 @@ import {
   clearSession,
   resolvePermission
 } from './services/agent-service'
+import { validateOpenAIApiKey } from './services/openai-research-service'
 
 // Store reference to main window for IPC events
 let mainWindow: BrowserWindow | null = null
@@ -167,6 +172,44 @@ app.whenReady().then(() => {
 
   ipcMain.handle('settings:set-open-tabs', async (_event, openTabs: OpenTabsState) => {
     setSettings({ openTabs })
+    return { success: true }
+  })
+
+  // ============================================
+  // OPENAI SETTINGS IPC HANDLERS
+  // ============================================
+
+  ipcMain.handle('openai:get-api-key', async () => {
+    return { success: true, data: getOpenAIApiKey() }
+  })
+
+  ipcMain.handle('openai:set-api-key', async (_event, key: string) => {
+    try {
+      const isValid = await validateOpenAIApiKey(key)
+      if (isValid) {
+        setOpenAIApiKey(key)
+      }
+      return { success: true, data: { valid: isValid } }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('openai:validate-api-key', async (_event, key: string) => {
+    try {
+      const isValid = await validateOpenAIApiKey(key)
+      return { success: true, data: isValid }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('openai:get-research-output-dir', async () => {
+    return { success: true, data: getResearchOutputDirectory() }
+  })
+
+  ipcMain.handle('openai:set-research-output-dir', async (_event, dir: string) => {
+    setResearchOutputDirectory(dir)
     return { success: true }
   })
 

@@ -14,12 +14,17 @@ interface ApiResult<T = void> {
 // Domain Types
 // ============================================
 
+// Agent type - determines which backend service handles the agent
+type AgentType = 'claude' | 'openai-research'
+
 interface Agent {
   id: string
   name: string
   filePath: string
   workspaceId: string
-  isGeneral?: boolean  // True for auto-created Chorus agent
+  isGeneral?: boolean    // True for built-in agents (Chorus, Deep Research)
+  type?: AgentType       // 'claude' (default) or 'openai-research'
+  description?: string   // Agent description for display
 }
 
 interface Workspace {
@@ -78,6 +83,9 @@ interface ChorusSettings {
   splitPane?: SplitPaneSettings
   editorFontFamily?: EditorFontFamily
   editorFontSize?: EditorFontSize
+  // OpenAI settings
+  openaiApiKey?: string
+  researchOutputDirectory?: string  // Default: './research'
 }
 
 // ============================================
@@ -618,6 +626,24 @@ interface CommandsAPI {
   execute: (workspaceId: string, commandName: string, args: string) => Promise<ApiResult<string>>
 }
 
+// OpenAI settings for Deep Research
+interface OpenAISettingsAPI {
+  getApiKey: () => Promise<ApiResult<string | null>>
+  setApiKey: (key: string) => Promise<ApiResult<{ valid: boolean }>>
+  validateApiKey: (key: string) => Promise<ApiResult<boolean>>
+  getResearchOutputDir: () => Promise<ApiResult<string>>
+  setResearchOutputDir: (dir: string) => Promise<ApiResult>
+}
+
+// Research agent API (OpenAI Deep Research)
+interface ResearchAPI {
+  stop: (conversationId: string) => Promise<ApiResult>
+  onDelta: (callback: (event: { conversationId: string; text: string }) => void) => () => void
+  onSearch: (callback: (event: { conversationId: string; query: string }) => void) => () => void
+  onComplete: (callback: (event: { conversationId: string; outputPath: string; text: string }) => void) => () => void
+  onError: (callback: (event: { conversationId: string; error: string }) => void) => () => void
+}
+
 interface CustomAPI {
   settings: SettingsAPI
   workspace: WorkspaceAPI
@@ -630,6 +656,8 @@ interface CustomAPI {
   session: SessionAPI
   workspaceSettings: WorkspaceSettingsAPI
   commands: CommandsAPI
+  openai: OpenAISettingsAPI
+  research: ResearchAPI
 }
 
 declare global {
@@ -640,6 +668,7 @@ declare global {
 }
 
 export type {
+  AgentType,
   Agent,
   Workspace,
   Tab,

@@ -8,6 +8,7 @@ import type {
   TodoItem,
   FileChange
 } from '../types'
+import { useWorkspaceStore } from './workspace-store'
 
 interface ChatStore {
   // State
@@ -32,6 +33,9 @@ interface ChatStore {
   // Details panel state - per conversation
   conversationTodos: Map<string, TodoItem[]>
   conversationFiles: Map<string, FileChange[]>
+
+  // Refresh key for cross-component coordination
+  conversationRefreshKey: number
 
   // Actions
   loadConversations: (workspaceId: string, agentId: string) => Promise<void>
@@ -65,6 +69,9 @@ interface ChatStore {
   addFileChange: (conversationId: string, change: FileChange) => void
   getTodos: (conversationId: string) => TodoItem[]
   getFileChanges: (conversationId: string) => FileChange[]
+
+  // Refresh actions
+  triggerConversationRefresh: () => void
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -90,6 +97,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Details panel state
   conversationTodos: new Map<string, TodoItem[]>(),
   conversationFiles: new Map<string, FileChange[]>(),
+
+  // Refresh key
+  conversationRefreshKey: 0,
 
   // Load conversations for a workspace/agent
   loadConversations: async (workspaceId: string, agentId: string) => {
@@ -239,6 +249,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         if (newActiveId !== activeConversationId) {
           await get().selectConversation(newActiveId)
         }
+
+        // Trigger branch refresh since conversation deletion may have cascade-deleted a branch
+        useWorkspaceStore.getState().triggerBranchRefresh()
       }
     } catch (error) {
       set({ error: String(error) })
@@ -637,5 +650,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   // Get file changes for a conversation
   getFileChanges: (conversationId: string) => {
     return get().conversationFiles.get(conversationId) || []
+  },
+
+  // Trigger conversation refresh across all components watching conversationRefreshKey
+  triggerConversationRefresh: () => {
+    set({ conversationRefreshKey: get().conversationRefreshKey + 1 })
   }
 }))

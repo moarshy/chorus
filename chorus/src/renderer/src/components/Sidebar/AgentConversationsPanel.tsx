@@ -103,7 +103,8 @@ export function AgentConversationsPanel() {
     createConversation,
     deleteConversation,
     conversations,
-    isLoading
+    isLoading,
+    conversationRefreshKey
   } = useChatStore()
 
   const [deleteConfirm, setDeleteConfirm] = useState<Conversation | null>(null)
@@ -111,12 +112,12 @@ export function AgentConversationsPanel() {
   const workspace = workspaces.find((ws) => ws.id === selectedWorkspaceId)
   const agent = workspace?.agents.find((a) => a.id === selectedAgentId)
 
-  // Load conversations when agent changes
+  // Load conversations when agent changes or refresh is triggered
   useEffect(() => {
     if (workspace && agent) {
       loadConversations(workspace.id, agent.id)
     }
-  }, [workspace?.id, agent?.id, loadConversations])
+  }, [workspace?.id, agent?.id, loadConversations, conversationRefreshKey])
 
   if (!agent || !workspace) {
     return null

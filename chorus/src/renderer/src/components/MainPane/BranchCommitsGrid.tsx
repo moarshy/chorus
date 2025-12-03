@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { GitBranch, GitCommit } from '../../types'
 import { useFileTreeStore } from '../../stores/file-tree-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useChatStore } from '../../stores/chat-store'
 
 interface BranchCommitsGridProps {
   workspacePath: string
@@ -486,6 +488,7 @@ export function BranchCommitsGrid({ workspacePath, workspaceId, onBranchChange, 
   const [isDeleting, setIsDeleting] = useState(false)
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const triggerFileTreeRefresh = useFileTreeStore((state) => state.triggerRefresh)
+  const branchRefreshKey = useWorkspaceStore((state) => state.branchRefreshKey)
 
   // Sort branches: current first, then local, then remote (excluding duplicates)
   const sortedBranches = useCallback(() => {
@@ -525,37 +528,54 @@ export function BranchCommitsGrid({ workspacePath, workspaceId, onBranchChange, 
     (pageIndex + 1) * BRANCHES_PER_PAGE
   )
 
-  // Load default branch and all branches
-  useEffect(() => {
+  // Load branches function
+  const loadBranches = useCallback(async () => {
     setIsLoadingBranches(true)
     setError(null)
 
     // Fetch default branch first
-    window.api.git.getDefaultBranch(workspacePath)
-      .then((result) => {
-        if (result.success && result.data) {
-          setDefaultBranch(result.data)
-        }
-      })
-      .catch(() => {
-        // Default branch not found, that's okay
-      })
+    try {
+      const defaultResult = await window.api.git.getDefaultBranch(workspacePath)
+      if (defaultResult.success && defaultResult.data) {
+        setDefaultBranch(defaultResult.data)
+      }
+    } catch {
+      // Default branch not found, that's okay
+    }
 
-    window.api.git.listBranches(workspacePath)
-      .then((result) => {
-        if (result.success && result.data) {
-          setBranches(result.data)
-        } else {
-          setError(result.error || 'Failed to load branches')
-        }
-      })
-      .catch((err) => {
-        setError(String(err))
-      })
-      .finally(() => {
-        setIsLoadingBranches(false)
-      })
+    try {
+      const result = await window.api.git.listBranches(workspacePath)
+      if (result.success && result.data) {
+        setBranches(result.data)
+      } else {
+        setError(result.error || 'Failed to load branches')
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setIsLoadingBranches(false)
+    }
   }, [workspacePath])
+
+  // Load default branch and all branches, listen for changes
+  useEffect(() => {
+    loadBranches()
+
+    // Listen for branch created events
+    const unsubBranch = window.api.git.onBranchCreated(() => {
+      loadBranches()
+    })
+
+    // Listen for commit created events
+    const unsubCommit = window.api.git.onCommitCreated(() => {
+      loadBranches()
+    })
+
+    return () => {
+      unsubBranch()
+      unsubCommit()
+    }
+  }, [workspacePath, branchRefreshKey, loadBranches])
 
   // Load commits for visible branches
   useEffect(() => {
@@ -681,6 +701,10 @@ export function BranchCommitsGrid({ workspacePath, workspaceId, onBranchChange, 
           })
         }
         onBranchChange()
+        // Trigger conversation refresh since branch deletion may have cascade-deleted conversations
+        useChatStore.getState().triggerConversationRefresh()
+        // Trigger branch refresh so AgentSessionsPanel also updates
+        useWorkspaceStore.getState().triggerBranchRefresh()
       } else {
         setError(result.error || 'Failed to delete branch')
       }

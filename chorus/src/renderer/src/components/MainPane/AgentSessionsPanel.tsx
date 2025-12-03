@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { AgentBranchInfo, FileDiff } from '../../types'
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useChatStore } from '../../stores/chat-store'
 import { DiffHunkViewer } from './DiffHunkViewer'
 import { MergePreviewDialog } from '../dialogs/MergePreviewDialog'
 
@@ -137,7 +138,7 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
   // E-3: Merge preview dialog
   const [mergePreview, setMergePreview] = useState<MergePreviewState | null>(null)
 
-  const { selectFile } = useWorkspaceStore()
+  const { selectFile, branchRefreshKey } = useWorkspaceStore()
 
   // Handle clicking on a file to open it
   const handleFileClick = (relativePath: string) => {
@@ -164,7 +165,7 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
       unsubBranch()
       unsubCommit()
     }
-  }, [workspacePath])
+  }, [workspacePath, branchRefreshKey])
 
   const loadBranches = async () => {
     setLoading(true)
@@ -289,6 +290,10 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
     const result = await window.api.git.deleteBranch(workspacePath, branchName, true, workspaceId)
     if (result.success) {
       await loadBranches()
+      // Trigger conversation refresh since branch deletion may have cascade-deleted conversations
+      useChatStore.getState().triggerConversationRefresh()
+      // Trigger branch refresh so BranchCommitsGrid also updates
+      useWorkspaceStore.getState().triggerBranchRefresh()
     }
     setActionInProgress(null)
   }
