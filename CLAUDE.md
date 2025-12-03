@@ -90,6 +90,23 @@ chorus/
 
 **Tab Navigation**: VS Code-style tabs enable switching between chat and file views. Clicking a file from Details panel opens it in a new tab while keeping the chat accessible. State is managed in workspace-store (`tabs`, `activeTabId`) and persisted via `ChorusSettings.openTabs`. The `selectFile` and `selectAgent` actions automatically create/activate tabs. Duplicate tabs are prevented by checking existing tabs. Tabs show workspace name in tooltip. See `TabBar.tsx` and `specifications/7-tab-navigation/`.
 
+**Automated Git Operations**: Both Claude and OpenAI Research agents support automated git operations controlled by workspace settings (`gitSettings.autoBranch` and `gitSettings.autoCommit`). When enabled:
+- **Auto-branching**: Creates a dedicated branch from main/master when a new conversation starts. Branch naming: `agent/{agentName}/{sessionId}` for Claude, `agent/deep-research/{conversationId}` for OpenAI Research. Existing uncommitted changes are stashed and restored after branch creation.
+- **Auto-committing**: Claude agents commit per-turn (when a `result` event fires) and on stop. OpenAI Research commits after saving each research output. Commit messages include the user prompt and changed files.
+- Branches are tracked per-conversation in `conversationBranches` Map and stored in `conversation.branchName` for cascade delete support.
+- Git operations notify renderer via `git:branch-created` and `git:commit-created` IPC events.
+- Shared infrastructure in `agent-sdk-service.ts`: `ensureAgentBranch()`, `commitAgentChanges()`.
+
+**OpenAI Deep Research Integration**: The "Deep Research" agent uses OpenAI's `@openai/agents` SDK for comprehensive web research. Key features:
+- **Models**: `o4-mini-deep-research-2025-06-26` (default) or `o3-deep-research-2025-06-26`
+- **API Key**: Stored in `ChorusSettings.openaiApiKey`, configured via Settings dialog
+- **Output**: Research results are saved to markdown files in the configured output directory (default: `./research`), with automatic git commit
+- **Streaming**: Shows real-time status ("🔍 Searching the web...", "🤔 Analyzing...") during the extensive search/reasoning phase
+- **Follow-ups**: Previous research outputs are included as context for follow-up questions (max 2 recent outputs)
+- **Routing**: `agent-service.ts` routes messages based on `agent.type` ('claude' vs 'openai-research')
+- **No session resumption**: Unlike Claude, OpenAI Research is stateless - each query is independent
+- See `chorus/src/main/services/openai-research-service.ts` and Settings dialog for OpenAI API key configuration.
+
 ## Development
 
 ```bash
@@ -104,8 +121,9 @@ bun run typecheck  # Type check all code
 
 - `chorus/src/main/index.ts` - IPC handler registration
 - `chorus/src/main/store/index.ts` - Data persistence schema
-- `chorus/src/main/services/agent-service.ts` - Agent API facade (delegates to SDK service)
-- `chorus/src/main/services/agent-sdk-service.ts` - Claude Agent SDK integration, streaming, permissions
+- `chorus/src/main/services/agent-service.ts` - Agent API facade (routes to SDK or OpenAI based on agent type)
+- `chorus/src/main/services/agent-sdk-service.ts` - Claude Agent SDK integration, streaming, permissions, shared git operations
+- `chorus/src/main/services/openai-research-service.ts` - OpenAI Deep Research integration using @openai/agents SDK
 - `chorus/src/main/services/conversation-service.ts` - Conversation CRUD, JSONL message storage
 - `chorus/src/main/services/git-service.ts` - Git operations (status, branches, checkout, clone)
 - `chorus/src/renderer/src/stores/workspace-store.ts` - Main UI state

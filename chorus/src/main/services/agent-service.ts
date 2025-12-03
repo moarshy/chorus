@@ -46,7 +46,8 @@ export async function sendMessage(
       repoPath,
       message,
       mainWindow,
-      settings
+      settings,
+      gitSettings
     )
   }
 

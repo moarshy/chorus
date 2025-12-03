@@ -84,8 +84,8 @@ function cancelPendingPermissions(conversationId: string): void {
 // Automated Git Operations
 // ============================================
 
-// Track which conversations have agent branches
-const conversationBranches: Map<string, string> = new Map()
+// Track which conversations have agent branches (exported for other services)
+export const conversationBranches: Map<string, string> = new Map()
 
 // Track files changed per turn (for commit-per-turn)
 const turnFileChanges: Map<string, Set<string>> = new Map()
@@ -93,13 +93,13 @@ const turnFileChanges: Map<string, Set<string>> = new Map()
 // Track user prompts for commit message generation
 const sessionPrompts: Map<string, string[]> = new Map()
 
-// Track original branch to restore after merge
-const originalBranches: Map<string, string> = new Map()
+// Track original branch to restore after merge (exported for other services)
+export const originalBranches: Map<string, string> = new Map()
 
 /**
  * Generate branch name for agent session
  */
-function generateAgentBranchName(agentName: string, sessionId: string): string {
+export function generateAgentBranchName(agentName: string, sessionId: string): string {
   const sanitizedAgentName = agentName.toLowerCase().replace(/[^a-z0-9]/g, '-')
   const shortSessionId = sessionId.slice(0, 7)
   return `agent/${sanitizedAgentName}/${shortSessionId}`
@@ -107,8 +107,9 @@ function generateAgentBranchName(agentName: string, sessionId: string): string {
 
 /**
  * Ensure agent branch exists and is checked out
+ * Exported for use by other agent services (e.g., OpenAI Research)
  */
-async function ensureAgentBranch(
+export async function ensureAgentBranch(
   conversationId: string,
   sessionId: string,
   agentName: string,
@@ -358,6 +359,60 @@ function cleanupGitTracking(conversationId: string): void {
   sessionPrompts.delete(conversationId)
   // Note: Don't delete conversationBranches - we want to keep the branch association
   // for future messages in the same conversation
+}
+
+/**
+ * Generic commit function for agent services
+ * Used by both Claude agent and OpenAI Research services
+ */
+export async function commitAgentChanges(
+  conversationId: string,
+  repoPath: string,
+  commitMessage: string,
+  files: string[],
+  commitType: 'turn' | 'stop' | 'research',
+  mainWindow: BrowserWindow,
+  gitSettings: GitSettings
+): Promise<string | null> {
+  // Check if auto-commit is enabled
+  if (!gitSettings.autoCommit) {
+    console.log('[Git] Auto-commit disabled in settings')
+    return null
+  }
+
+  const branchName = conversationBranches.get(conversationId)
+  if (!branchName) {
+    console.log('[Git] No branch for this conversation, skipping commit')
+    return null
+  }
+
+  try {
+    // Check if there are actual changes to commit
+    const status = await gitService.getStatus(repoPath)
+    if (!status.isDirty) {
+      console.log('[Git] No changes to commit')
+      return null
+    }
+
+    await gitService.stageAll(repoPath)
+    const commitHash = await gitService.commit(repoPath, commitMessage)
+
+    // Notify renderer
+    mainWindow.webContents.send('git:commit-created', {
+      conversationId,
+      branchName,
+      commitHash,
+      message: commitMessage,
+      files,
+      type: commitType
+    })
+
+    console.log(`[Git] Commit (${commitType}): ${commitHash.slice(0, 7)}`)
+    return commitHash
+  } catch (error) {
+    console.error(`[Git] Commit failed (${commitType}):`, error)
+    return null
+  }
 }
 
 // ============================================

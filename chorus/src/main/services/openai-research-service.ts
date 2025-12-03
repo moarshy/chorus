@@ -13,7 +13,11 @@ import {
   loadConversation,
   ConversationSettings
 } from './conversation-service'
-import { getOpenAIApiKey, getResearchOutputDirectory } from '../store'
+import { getOpenAIApiKey, getResearchOutputDirectory, GitSettings, DEFAULT_GIT_SETTINGS } from '../store'
+import {
+  ensureAgentBranch,
+  commitAgentChanges
+} from './agent-sdk-service'
 
 // ============================================
 // Active Sessions Management
@@ -21,6 +25,23 @@ import { getOpenAIApiKey, getResearchOutputDirectory } from '../store'
 
 // Store active abort controllers per conversation
 const activeSessions: Map<string, AbortController> = new Map()
+
+// ============================================
+// Research-specific Git Helpers
+// ============================================
+
+/**
+ * Generate commit message for research output
+ */
+function generateResearchCommitMessage(query: string, outputPath: string): string {
+  const maxQueryLength = 50
+  let summary = query.slice(0, maxQueryLength)
+  if (query.length > maxQueryLength) {
+    summary += '...'
+  }
+
+  return `[Deep Research] ${summary}\n\nOutput: ${outputPath}`
+}
 
 // ============================================
 // OpenAI Research Service
@@ -36,7 +57,8 @@ export async function sendResearchMessage(
   repoPath: string,
   message: string,
   mainWindow: BrowserWindow,
-  settings?: ConversationSettings
+  settings?: ConversationSettings,
+  gitSettings?: GitSettings
 ): Promise<void> {
   // Stop any existing session
   stopResearchAgent(conversationId)
@@ -94,6 +116,23 @@ export async function sendResearchMessage(
   // Track state
   let streamingContent = ''
   const isFirstMessage = !previousContext
+  const effectiveGitSettings = gitSettings || DEFAULT_GIT_SETTINGS
+
+  // Create agent branch for first message (using shared git infrastructure)
+  if (isFirstMessage) {
+    // Use conversationId as sessionId for research (no SDK session concept)
+    const branchName = await ensureAgentBranch(
+      conversationId,
+      conversationId, // sessionId - use conversationId for research
+      'deep-research',
+      repoPath,
+      mainWindow,
+      effectiveGitSettings
+    )
+    if (branchName) {
+      updateConversation(conversationId, { branchName })
+    }
+  }
 
   try {
     // Configure OpenAI client with extended timeout for deep research
@@ -235,6 +274,18 @@ Guidelines:
       filePath: outputPath,
       toolName: 'ResearchSave'
     })
+
+    // Auto-commit the research output (using shared git infrastructure)
+    const commitMessage = generateResearchCommitMessage(message, outputPath)
+    await commitAgentChanges(
+      conversationId,
+      repoPath,
+      commitMessage,
+      [outputPath],
+      'research',
+      mainWindow,
+      effectiveGitSettings
+    )
 
     // Generate title from first message
     if (isFirstMessage) {
