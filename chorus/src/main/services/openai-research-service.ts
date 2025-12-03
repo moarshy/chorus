@@ -140,7 +140,10 @@ Guidelines:
 
     // Process stream events
     for await (const event of stream) {
-      // Handle text streaming
+      // Log event types to understand the structure
+      console.log('[OpenAI Research] Event type:', event.type, JSON.stringify(event).substring(0, 200))
+
+      // Handle text streaming - try multiple possible event structures
       if (event.type === 'raw_model_stream_event') {
         const data = event.data as { delta?: { type: string; text?: string } }
         const delta = data?.delta
@@ -149,6 +152,19 @@ Guidelines:
           mainWindow.webContents.send('agent:stream-delta', {
             conversationId,
             delta: delta.text
+          })
+        }
+      }
+
+      // Try response_output_text_delta for newer SDK versions
+      if (event.type === 'response_output_text_delta' || event.type === 'response.output_text.delta') {
+        const textEvent = event as { delta?: string; text?: string }
+        const text = textEvent.delta || textEvent.text
+        if (text) {
+          streamingContent += text
+          mainWindow.webContents.send('agent:stream-delta', {
+            conversationId,
+            delta: text
           })
         }
       }
