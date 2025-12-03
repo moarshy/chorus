@@ -93,7 +93,6 @@ export async function sendResearchMessage(
 
   // Track state
   let streamingContent = ''
-  const searchQueries: string[] = []
   const isFirstMessage = !previousContext
 
   try {
@@ -138,47 +137,61 @@ Guidelines:
       signal: controller.signal
     })
 
+    // Track search count for status
+    let searchCount = 0
+
     // Process stream events
     for await (const event of stream) {
-      // Log event types to understand the structure
-      console.log('[OpenAI Research] Event type:', event.type, JSON.stringify(event).substring(0, 200))
-
-      // Handle text streaming - try multiple possible event structures
       if (event.type === 'raw_model_stream_event') {
-        const data = event.data as { delta?: { type: string; text?: string } }
-        const delta = data?.delta
-        if (delta?.type === 'text_delta' && delta.text) {
-          streamingContent += delta.text
+        const data = event.data as {
+          type?: string
+          event?: {
+            type: string
+            delta?: string
+            item?: { type: string; status?: string }
+          }
+        }
+        const innerEvent = data?.event
+
+        // Handle text streaming - multiple possible event types
+        if (innerEvent?.type === 'response.output_text.delta' && innerEvent.delta) {
+          streamingContent += innerEvent.delta
           mainWindow.webContents.send('agent:stream-delta', {
             conversationId,
-            delta: delta.text
+            delta: innerEvent.delta
           })
         }
-      }
 
-      // Try response_output_text_delta for newer SDK versions
-      if (event.type === 'response_output_text_delta' || event.type === 'response.output_text.delta') {
-        const textEvent = event as { delta?: string; text?: string }
-        const text = textEvent.delta || textEvent.text
-        if (text) {
-          streamingContent += text
+        // Also check for content_part delta (alternative text streaming format)
+        if (innerEvent?.type === 'response.content_part.delta') {
+          const contentDelta = (innerEvent as { delta?: { text?: string } }).delta?.text
+          if (contentDelta) {
+            streamingContent += contentDelta
+            mainWindow.webContents.send('agent:stream-delta', {
+              conversationId,
+              delta: contentDelta
+            })
+          }
+        }
+
+        // Track web searches for status
+        if (innerEvent?.type === 'response.web_search_call.searching') {
+          searchCount++
           mainWindow.webContents.send('agent:stream-delta', {
             conversationId,
-            delta: text
+            delta: searchCount === 1 ? `🔍 Searching the web...\n` : ''
           })
         }
-      }
 
-      // Handle tool calls (web searches)
-      if (event.type === 'run_item_stream_event') {
-        const itemEvent = event as { name: string; item?: { name?: string; input?: { query?: string } } }
-        if (itemEvent.name === 'tool_called' && itemEvent.item?.name === 'web_search') {
-          const searchQuery = itemEvent.item.input?.query || 'web'
-          searchQueries.push(searchQuery)
-          mainWindow.webContents.send('research:search', {
-            conversationId,
-            query: searchQuery
-          })
+        // Show when reasoning
+        if (innerEvent?.type === 'response.output_item.added') {
+          const item = (innerEvent as { item?: { type: string } }).item
+          if (item?.type === 'reasoning' && searchCount === 0) {
+            mainWindow.webContents.send('agent:stream-delta', {
+              conversationId,
+              delta: '🤔 Analyzing your question...\n'
+            })
+          }
         }
       }
     }

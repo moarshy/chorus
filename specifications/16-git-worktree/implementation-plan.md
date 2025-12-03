@@ -4,6 +4,47 @@
 
 This plan implements git worktree support for concurrent agent isolation in Chorus. Each active agent conversation gets its own worktree, enabling true parallel execution without filesystem conflicts.
 
+**Key Integration Points:**
+- **Builds on Spec 12** (Automated Git Operations) - Worktrees enhance the existing `ensureAgentBranch` and auto-commit functionality
+- **Supports all agent types** - Works for both Claude SDK agents AND OpenAI Deep Research agents
+- **Shared git layer** - Single worktree service used by all agent backends
+
+## Architecture: Agent-Agnostic Git Layer
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Agent Services                            │
+├─────────────────────────────┬───────────────────────────────────┤
+│  Claude SDK Service         │  OpenAI Research Service          │
+│  (agent-sdk-service.ts)     │  (openai-research-service.ts)     │
+│                             │                                    │
+│  - Uses SDK query()         │  - Uses OpenAI Agents SDK          │
+│  - PostToolUse hooks        │  - WebSearchTool                   │
+│  - canUseTool callback      │  - Saves reports to files          │
+└──────────────┬──────────────┴──────────────────┬────────────────┘
+               │                                  │
+               ▼                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Git Operations Layer                          │
+│                    (worktree-service.ts)                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ensureConversationWorktree(conversationId, branchName, ...)    │
+│  getAgentWorkingDirectory(conversationId, repoPath, ...)        │
+│  autoCommitTurnChanges(conversationId, worktreePath, ...)       │
+│  removeConversationWorktree(conversationId, ...)                │
+├─────────────────────────────────────────────────────────────────┤
+│                       git-service.ts                             │
+│  createWorktree() | removeWorktree() | listWorktrees() | ...    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Flow for ANY agent type:**
+1. Conversation starts → `getAgentWorkingDirectory()` called
+2. If worktrees enabled → creates/reuses worktree at `.chorus-worktrees/{conversationId}/`
+3. Agent service receives `cwd` path (worktree or main repo)
+4. Agent operates in isolated directory
+5. Auto-commit hooks work the same (in worktree context)
+
 ## Phase 1: Git Service Worktree Functions
 
 ### 1.1 Add Worktree Functions to git-service.ts
@@ -323,7 +364,9 @@ interface WorktreeStatus {
 }
 ```
 
-## Phase 2: Agent SDK Integration
+## Phase 2: Agent Services Integration
+
+This phase integrates worktrees with **both** agent backends (Claude SDK and OpenAI Research). The key is a shared `worktree-service.ts` that any agent service can use.
 
 ### 2.1 Update Workspace Git Settings
 
@@ -588,7 +631,159 @@ async function ensureAgentBranch(
 }
 ```
 
-### 2.5 Update Conversation Schema
+### 2.5 Integrate with OpenAI Research Service
+
+**File:** `chorus/src/main/services/openai-research-service.ts`
+
+The OpenAI Research agent also uses worktrees for isolation. Since it saves research reports to files, the worktree provides a clean location.
+
+```typescript
+import * as worktreeService from './worktree-service'
+import * as gitService from './git-service'
+
+export async function sendResearchMessage(
+  conversationId: string,
+  workspaceId: string,
+  message: string
+): Promise<void> {
+  const workspace = getWorkspace(workspaceId)
+  const conversation = getConversation(conversationId)
+  const gitSettings = workspace.settings?.git || DEFAULT_GIT_SETTINGS
+
+  // Get or create worktree (same as Claude agent)
+  let outputPath = workspace.path
+
+  if (gitSettings.autoBranch && gitSettings.useWorktrees) {
+    const branchName = conversation.branchName ||
+      generateAgentBranchName('deep-research', conversationId.slice(0, 7))
+
+    const worktreePath = await worktreeService.ensureConversationWorktree(
+      workspace.path,
+      conversationId,
+      branchName,
+      gitSettings
+    )
+
+    if (worktreePath) {
+      outputPath = worktreePath
+      updateConversation(conversationId, { worktreePath, branchName })
+    }
+  }
+
+  // Run research (output goes to worktree)
+  const researchOutputDir = path.join(outputPath, workspace.settings?.researchOutputDirectory || 'research')
+  await fs.mkdir(researchOutputDir, { recursive: true })
+
+  const stream = runResearch(message, {
+    model: conversation.settings?.model || 'o4-mini-deep-research-2025-06-26',
+    apiKey: getOpenAIApiKey(),
+    previousContext: await getPreviousContext(conversationId)
+  })
+
+  let fullResponse = ''
+  for await (const event of stream) {
+    if (event.type === 'delta') {
+      fullResponse += event.text
+      mainWindow.webContents.send('research:delta', { conversationId, text: event.text })
+    }
+  }
+
+  // Save report to worktree
+  const filename = generateReportFilename(message)
+  const reportPath = path.join(researchOutputDir, filename)
+  await fs.writeFile(reportPath, fullResponse)
+
+  // Auto-commit if enabled (commits to worktree's branch)
+  if (gitSettings.autoCommit && conversation.worktreePath) {
+    await gitService.stageAll(conversation.worktreePath)
+    await gitService.commit(
+      conversation.worktreePath,
+      `[Research] ${message.slice(0, 50)}...\n\nSaved: ${filename}`
+    )
+  }
+
+  mainWindow.webContents.send('research:complete', {
+    conversationId,
+    outputPath: reportPath
+  })
+}
+```
+
+### 2.6 Shared Git Helper for Both Agent Types
+
+**File:** `chorus/src/main/services/agent-git-helper.ts` (NEW - Shared utilities)
+
+```typescript
+import * as worktreeService from './worktree-service'
+import * as gitService from './git-service'
+
+/**
+ * Get the working directory for any agent conversation.
+ * Returns worktree path if enabled, otherwise main repo path.
+ * Works for Claude, OpenAI, or any future agent type.
+ */
+export async function getAgentWorkingDirectory(
+  conversationId: string,
+  agentName: string,
+  repoPath: string,
+  gitSettings: GitSettings
+): Promise<{ cwd: string; branchName: string | null; worktreePath: string | null }> {
+  if (!gitSettings.autoBranch) {
+    return { cwd: repoPath, branchName: null, worktreePath: null }
+  }
+
+  const branchName = generateAgentBranchName(agentName, conversationId.slice(0, 7))
+
+  if (!gitSettings.useWorktrees) {
+    // Legacy: checkout in main repo
+    await gitService.checkout(repoPath, branchName)
+    return { cwd: repoPath, branchName, worktreePath: null }
+  }
+
+  // Worktree mode: create isolated working directory
+  const worktreePath = await worktreeService.ensureConversationWorktree(
+    repoPath,
+    conversationId,
+    branchName,
+    gitSettings
+  )
+
+  return {
+    cwd: worktreePath || repoPath,
+    branchName,
+    worktreePath
+  }
+}
+
+/**
+ * Auto-commit changes for any agent.
+ */
+export async function autoCommitAgentChanges(
+  cwd: string,
+  message: string,
+  gitSettings: GitSettings
+): Promise<string | null> {
+  if (!gitSettings.autoCommit) {
+    return null
+  }
+
+  const status = await gitService.getStatus(cwd)
+  if (!status.isDirty) {
+    return null
+  }
+
+  await gitService.stageAll(cwd)
+  const commitHash = await gitService.commit(cwd, message)
+  return commitHash
+}
+
+function generateAgentBranchName(agentName: string, sessionId: string): string {
+  const sanitizedAgentName = agentName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+  return `agent/${sanitizedAgentName}/${sessionId}`
+}
+```
+
+### 2.7 Update Conversation Schema
 
 **File:** `chorus/src/main/services/conversation-service.ts`
 
@@ -1012,23 +1207,40 @@ describe('concurrent agent execution', () => {
 
 | File | Changes |
 |------|---------|
+| **Main Process - Git Layer** | |
 | `git-service.ts` | Add 8+ worktree functions |
+| `worktree-service.ts` | NEW: Worktree lifecycle management |
+| `agent-git-helper.ts` | NEW: Shared git utilities for all agent types |
+| **Main Process - Agent Services** | |
+| `agent-sdk-service.ts` | Use worktree path as cwd (Claude agents) |
+| `openai-research-service.ts` | Use worktree path for research output (OpenAI agents) |
+| `conversation-service.ts` | Add worktreePath field |
+| **Main Process - IPC** | |
 | `main/index.ts` | Add 5 worktree IPC handlers |
 | `preload/index.ts` | Expose worktree methods |
 | `preload/index.d.ts` | Add worktree types |
-| `worktree-service.ts` | NEW: Worktree lifecycle management |
-| `agent-sdk-service.ts` | Use worktree path as cwd |
-| `conversation-service.ts` | Add worktreePath field |
-| `store/index.ts` | Add worktree settings |
+| **Main Process - Settings** | |
+| `store/index.ts` | Add worktree settings to GitSettings |
+| **Renderer - UI Components** | |
 | `WorktreePanel.tsx` | NEW: Worktree list UI |
 | `WorkspaceSettings.tsx` | Add worktree settings UI |
 | `WorkspaceOverview.tsx` | Add WorktreePanel |
 | `ChatHeader.tsx` | Add worktree indicator |
+| `FileBrowser.tsx` | Show branch context for active conversation |
 
 ## Implementation Order
 
 1. **Phase 1: Git Service** - Core worktree git operations
-2. **Phase 2: SDK Integration** - Use worktrees for agent cwd
-3. **Phase 3: UI** - Settings and worktree panel
+2. **Phase 2: Agent Integration** - Use worktrees for both Claude and OpenAI agents
+3. **Phase 3: UI** - Settings, worktree panel, branch indicators
 4. **Phase 4: Lifecycle** - Cleanup and pruning
 5. **Phase 5: Testing** - Unit, integration, manual tests
+
+## Relationship to Other Specs
+
+| Spec | Relationship |
+|------|--------------|
+| **Spec 12** (Automated Git Operations) | Worktrees BUILD ON existing auto-branch/auto-commit features. Same `GitSettings`, same commit hooks, just isolated directories. |
+| **Spec 15** (OpenAI Deep Research) | Research agent uses worktree path for output directory. Research reports auto-committed to agent branch. |
+| **Spec 7** (Tab Navigation) | File tabs show branch context when viewing worktree files. |
+| **Spec 6** (Details Panel) | Files in Details panel link to worktree path, not main repo. |

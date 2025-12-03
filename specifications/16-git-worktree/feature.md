@@ -4,6 +4,14 @@
 
 Implement git worktree support to enable true parallel agent execution. Each active agent conversation gets its own isolated working directory (worktree), allowing multiple agents to work on different branches simultaneously without filesystem conflicts.
 
+**Supported Agent Types:**
+- **Claude SDK Agents** (Chorus, custom agents) - File operations via SDK tools (Write, Edit, etc.)
+- **OpenAI Deep Research Agents** - Research reports saved to files
+
+**Integration with Existing Features:**
+- **Builds on Spec 12** (Automated Git Operations) - Worktrees enhance the existing auto-branch and auto-commit functionality
+- **Works with Spec 15** (OpenAI Deep Research) - Research output goes to worktree directory
+
 ## Problem Statement
 
 ### Current Architecture Limitation
