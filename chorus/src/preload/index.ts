@@ -70,6 +70,23 @@ interface GitCommitCreatedEvent {
   type: 'turn' | 'stop'
 }
 
+// Research-specific events
+interface ResearchSearchEvent {
+  conversationId: string
+  query: string
+}
+
+interface ResearchCompleteEvent {
+  conversationId: string
+  outputPath: string
+  text: string
+}
+
+interface ResearchErrorEvent {
+  conversationId: string
+  error: string
+}
+
 // Custom APIs for renderer - these are the ONLY APIs renderer can access
 const api = {
   // Settings operations
@@ -317,6 +334,34 @@ const api = {
       ipcRenderer.invoke('commands:discover', workspaceId),
     execute: (workspaceId: string, commandName: string, args: string) =>
       ipcRenderer.invoke('commands:execute', workspaceId, commandName, args)
+  },
+
+  // OpenAI settings operations
+  openai: {
+    getApiKey: () => ipcRenderer.invoke('openai:get-api-key'),
+    setApiKey: (key: string) => ipcRenderer.invoke('openai:set-api-key', key),
+    validateApiKey: (key: string) => ipcRenderer.invoke('openai:validate-api-key', key),
+    getResearchOutputDir: () => ipcRenderer.invoke('openai:get-research-output-dir'),
+    setResearchOutputDir: (dir: string) => ipcRenderer.invoke('openai:set-research-output-dir', dir)
+  },
+
+  // Research events (for OpenAI Deep Research agent)
+  research: {
+    onSearch: (callback: (event: ResearchSearchEvent) => void) => {
+      const handler = (_event: unknown, data: ResearchSearchEvent) => callback(data)
+      ipcRenderer.on('research:search', handler)
+      return () => ipcRenderer.removeListener('research:search', handler)
+    },
+    onComplete: (callback: (event: ResearchCompleteEvent) => void) => {
+      const handler = (_event: unknown, data: ResearchCompleteEvent) => callback(data)
+      ipcRenderer.on('research:complete', handler)
+      return () => ipcRenderer.removeListener('research:complete', handler)
+    },
+    onError: (callback: (event: ResearchErrorEvent) => void) => {
+      const handler = (_event: unknown, data: ResearchErrorEvent) => callback(data)
+      ipcRenderer.on('research:error', handler)
+      return () => ipcRenderer.removeListener('research:error', handler)
+    }
   }
 }
 

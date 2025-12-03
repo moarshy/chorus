@@ -1,4 +1,4 @@
-import { Agent, run, WebSearchTool } from '@openai/agents'
+import { Agent, run, webSearchTool } from '@openai/agents'
 import OpenAI from 'openai'
 import { setDefaultOpenAIClient } from '@openai/agents'
 import { BrowserWindow } from 'electron'
@@ -32,7 +32,7 @@ const activeSessions: Map<string, AbortController> = new Map()
 export async function sendResearchMessage(
   conversationId: string,
   agentId: string,
-  workspaceId: string,
+  _workspaceId: string,
   repoPath: string,
   message: string,
   mainWindow: BrowserWindow,
@@ -115,7 +115,7 @@ export async function sendResearchMessage(
     const researchAgent = new Agent({
       name: 'Deep Researcher',
       model: modelId,
-      tools: [new WebSearchTool()],
+      tools: [webSearchTool()],
       instructions: `You perform deep empirical research based on the user's question.
 
 Guidelines:

@@ -912,10 +912,19 @@ app.whenReady().then(() => {
         // Get workspace git settings if workspaceId is available
         const gitSettings = workspaceId ? getWorkspaceSettings(workspaceId).git : undefined
 
+        // Find the agent type from the workspace
+        let agentType: 'claude' | 'openai-research' | undefined
+        if (workspaceId) {
+          const workspace = getWorkspaces().find((ws) => ws.id === workspaceId)
+          const agent = workspace?.agents.find((a) => a.id === agentId)
+          agentType = agent?.type
+        }
+
         // Fire and forget - response comes via events
         sendMessage(
           conversationId,
           agentId,
+          workspaceId || '',
           repoPath,
           message,
           sessionId,
@@ -923,7 +932,8 @@ app.whenReady().then(() => {
           agentFilePath || null,
           mainWindow,
           settings,
-          gitSettings
+          gitSettings,
+          agentType
         )
         return { success: true }
       } catch (error) {
@@ -934,7 +944,17 @@ app.whenReady().then(() => {
 
   ipcMain.handle('agent:stop', async (_event, agentId: string, conversationId?: string) => {
     try {
-      stopAgent(agentId, conversationId)
+      // Find the agent type from the conversation
+      let agentType: 'claude' | 'openai-research' | undefined
+      if (conversationId) {
+        const { conversation } = loadConversation(conversationId)
+        if (conversation?.workspaceId) {
+          const workspace = getWorkspaces().find((ws) => ws.id === conversation.workspaceId)
+          const agent = workspace?.agents.find((a) => a.id === agentId)
+          agentType = agent?.type
+        }
+      }
+      stopAgent(agentId, conversationId, agentType)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
