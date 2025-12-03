@@ -16,7 +16,8 @@ import {
 import { getOpenAIApiKey, getResearchOutputDirectory, GitSettings, DEFAULT_GIT_SETTINGS } from '../store'
 import {
   ensureAgentBranch,
-  commitAgentChanges
+  commitAgentChanges,
+  conversationBranches
 } from './agent-sdk-service'
 import * as worktreeService from './worktree-service'
 import * as gitService from './git-service'
@@ -139,6 +140,8 @@ export async function sendResearchMessage(
       outputBasePath = worktreePath
       console.log(`[OpenAI Research] Using worktree: ${worktreePath}`)
       updateConversation(conversationId, { branchName, worktreePath })
+      // Register branch for commit operations
+      conversationBranches.set(conversationId, branchName)
     }
   } else if (isFirstMessage) {
     // Legacy mode: create branch in main repo (without worktree)
@@ -158,12 +161,13 @@ export async function sendResearchMessage(
     if (effectiveGitSettings.useWorktrees) {
       const existingWorktree = worktreeService.getConversationWorktreePath(repoPath, conversationId)
       const worktrees = await gitService.listWorktrees(repoPath)
-      const hasWorktree = worktrees.some(w => w.path === existingWorktree)
-
-      if (hasWorktree) {
+      const existingWorktreeInfo = worktrees.find(w => w.path === existingWorktree)
+      if (existingWorktreeInfo) {
         outputBasePath = existingWorktree
         worktreePath = existingWorktree
         console.log(`[OpenAI Research] Resuming in existing worktree: ${existingWorktree}`)
+        // Register branch for commit operations
+        conversationBranches.set(conversationId, existingWorktreeInfo.branch)
       }
     }
   }

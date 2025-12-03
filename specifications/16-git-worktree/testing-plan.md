@@ -52,15 +52,15 @@ This document outlines the testing strategy for verifying git worktree integrati
 ### 3. OpenAI Deep Research Agent - Worktree Creation
 
 **Test 3.1: Research Output Goes to Worktree**
-- [ ] Ensure "Use worktrees" is enabled
-- [ ] Start a new Deep Research conversation
-- [ ] Send a research query (e.g., "Research best practices for React state management")
-- [ ] Wait for research to complete
-- [ ] Verify research markdown file is in `.chorus-worktrees/{conversationId}/` directory
-- [ ] Verify research output is NOT in main repo
+- [x] Ensure "Use worktrees" is enabled
+- [x] Start a new Deep Research conversation
+- [x] Send a research query (e.g., "Research best practices for React state management")
+- [x] Wait for research to complete
+- [x] Verify research markdown file is in `.chorus-worktrees/{conversationId}/` directory
+- [x] Verify research output is NOT in main repo
 
 **Test 3.2: Research Branch Naming**
-- [ ] Check worktree branch name follows pattern: `agent/deep-research/{sessionId}`
+- [x] Check worktree branch name follows pattern: `agent/deep-research/{sessionId}`
 
 ### 4. Parallel Agent Execution
 

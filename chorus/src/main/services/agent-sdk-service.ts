@@ -97,6 +97,9 @@ const sessionPrompts: Map<string, string[]> = new Map()
 // Track original branch to restore after merge (exported for other services)
 export const originalBranches: Map<string, string> = new Map()
 
+// Track worktree paths per conversation (for commit operations)
+const conversationWorktrees: Map<string, string> = new Map()
+
 /**
  * Generate branch name for agent session
  */
@@ -280,12 +283,20 @@ async function commitTurnChanges(
   const branchName = conversationBranches.get(conversationId)
 
   if (!changedFiles || changedFiles.size === 0 || !branchName) {
+    console.log('[SDK] No files changed or no branch for commit', {
+      hasFiles: !!changedFiles,
+      fileCount: changedFiles?.size || 0,
+      hasBranch: !!branchName
+    })
     return
   }
 
+  // Use worktree path if available, otherwise use main repo
+  const commitPath = conversationWorktrees.get(conversationId) || repoPath
+
   try {
     // Check if there are actual changes to commit
-    const status = await gitService.getStatus(repoPath)
+    const status = await gitService.getStatus(commitPath)
     if (!status.isDirty) {
       console.log('[SDK] No changes to commit')
       turnFileChanges.delete(conversationId)
@@ -294,8 +305,8 @@ async function commitTurnChanges(
 
     const commitMessage = generateTurnCommitMessage(userPrompt, changedFiles)
 
-    await gitService.stageAll(repoPath)
-    const commitHash = await gitService.commit(repoPath, commitMessage)
+    await gitService.stageAll(commitPath)
+    const commitHash = await gitService.commit(commitPath, commitMessage)
 
     // Notify renderer
     mainWindow.webContents.send('git:commit-created', {
@@ -344,9 +355,12 @@ async function commitOnStop(
     return
   }
 
+  // Use worktree path if available, otherwise use main repo
+  const commitPath = conversationWorktrees.get(conversationId) || repoPath
+
   try {
     // Check if there are actual changes to commit
-    const status = await gitService.getStatus(repoPath)
+    const status = await gitService.getStatus(commitPath)
     if (!status.isDirty) {
       console.log('[SDK] No remaining changes to commit on stop')
       return
@@ -354,8 +368,8 @@ async function commitOnStop(
 
     const commitMessage = generateStopCommitMessage(prompts, changedFiles)
 
-    await gitService.stageAll(repoPath)
-    const commitHash = await gitService.commit(repoPath, commitMessage)
+    await gitService.stageAll(commitPath)
+    const commitHash = await gitService.commit(commitPath, commitMessage)
 
     // Notify renderer
     mainWindow.webContents.send('git:commit-created', {
@@ -557,19 +571,24 @@ export async function sendMessageSDK(
           // Update conversation with worktree path
           updateConversation(conversationId, { worktreePath })
 
-          // Register branch name
+          // Register branch name and worktree path for commit operations
           conversationBranches.set(conversationId, branchName)
+          conversationWorktrees.set(conversationId, worktreePath)
         }
       } else {
         // Resuming session - check for existing worktree
         const existingWorktree = worktreeService.getConversationWorktreePath(repoPath, conversationId)
         const worktrees = await gitService.listWorktrees(repoPath)
-        const hasWorktree = worktrees.some(w => w.path === existingWorktree)
+        const existingWorktreeInfo = worktrees.find(w => w.path === existingWorktree)
 
-        if (hasWorktree) {
+        if (existingWorktreeInfo) {
           agentCwd = existingWorktree
           worktreePath = existingWorktree
           console.log(`[SDK] Resuming in existing worktree: ${existingWorktree}`)
+
+          // Register branch name and worktree path for commit operations
+          conversationBranches.set(conversationId, existingWorktreeInfo.branch)
+          conversationWorktrees.set(conversationId, existingWorktree)
         }
       }
     }
