@@ -169,9 +169,14 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
 
   const loadBranches = async () => {
     setLoading(true)
+    console.log('[AgentSessionsPanel] Loading branches for:', workspacePath)
     const result = await window.api.git.getAgentBranches(workspacePath)
+    console.log('[AgentSessionsPanel] getAgentBranches result:', result)
     if (result.success && result.data) {
       setBranches(result.data)
+      console.log('[AgentSessionsPanel] Found', result.data.length, 'agent branches')
+    } else {
+      console.log('[AgentSessionsPanel] No agent branches found or error:', result.error)
     }
     setLoading(false)
   }
@@ -416,6 +421,7 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
   }
 
   if (branches.length === 0) {
+    console.log('[AgentSessionsPanel] No branches, returning null')
     return null // Don't show section if no agent branches
   }
 

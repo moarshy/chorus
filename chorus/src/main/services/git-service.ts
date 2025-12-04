@@ -237,14 +237,32 @@ export async function clone(
   targetDir: string,
   onProgress: (progress: CloneProgress) => void
 ): Promise<void> {
+  console.log('[Git] Clone starting:', { url, targetDir })
+
+  // Check if target directory already exists
+  if (existsSync(targetDir)) {
+    // Check if it's already a git repo
+    const gitDir = join(targetDir, '.git')
+    if (existsSync(gitDir)) {
+      throw new Error(`Directory already exists and is a git repository: ${targetDir}\n\nTry adding it as a local workspace instead.`)
+    } else {
+      throw new Error(`Directory already exists: ${targetDir}\n\nPlease choose a different location or remove the existing directory.`)
+    }
+  }
+
+  // Track stderr for error messages
+  let stderrOutput = ''
+
   return new Promise((resolve, reject) => {
     activeCloneProcess = spawn('git', ['clone', '--progress', url, targetDir], {
       stdio: ['pipe', 'pipe', 'pipe']
     })
+    console.log('[Git] Clone process spawned')
 
     // Git outputs progress to stderr
     activeCloneProcess.stderr?.on('data', (data: Buffer) => {
       const output = data.toString()
+      stderrOutput += output  // Capture all stderr for error messages
 
       // Parse progress output
       // Examples:
@@ -273,6 +291,7 @@ export async function clone(
     })
 
     activeCloneProcess.on('close', (code) => {
+      console.log('[Git] Clone process closed with code:', code)
       activeCloneProcess = null
       if (code === 0) {
         onProgress({
@@ -282,11 +301,29 @@ export async function clone(
         })
         resolve()
       } else {
-        reject(new Error(`Git clone failed with code ${code}`))
+        console.error('[Git] Clone failed with code:', code, 'stderr:', stderrOutput)
+
+        // Parse common git clone errors for better messages
+        let errorMessage = `Git clone failed (code ${code})`
+
+        if (stderrOutput.includes('already exists and is not an empty directory')) {
+          errorMessage = `Directory already exists: ${targetDir}\n\nPlease choose a different location or remove the existing directory.`
+        } else if (stderrOutput.includes('Repository not found')) {
+          errorMessage = `Repository not found: ${url}\n\nCheck the URL and your access permissions.`
+        } else if (stderrOutput.includes('Permission denied') || stderrOutput.includes('publickey')) {
+          errorMessage = `Permission denied.\n\nMake sure you have access to this repository and your SSH keys are configured correctly.`
+        } else if (stderrOutput.includes('Could not resolve host')) {
+          errorMessage = `Could not connect to host.\n\nCheck your internet connection and the repository URL.`
+        } else if (stderrOutput.trim()) {
+          errorMessage = stderrOutput.trim()
+        }
+
+        reject(new Error(errorMessage))
       }
     })
 
     activeCloneProcess.on('error', (error) => {
+      console.error('[Git] Clone process error:', error)
       activeCloneProcess = null
       reject(error)
     })
@@ -321,7 +358,9 @@ export async function listBranches(path: string): Promise<GitBranch[]> {
       .filter(Boolean)
       .map((line) => {
         const isCurrent = line.startsWith('*')
-        const name = line.replace(/^\*?\s+/, '').trim()
+        // Remove leading markers: * (current), + (worktree), and any spaces
+        // Format: "* main" or "+ branch-in-worktree" or "  regular-branch"
+        const name = line.replace(/^[\s*+]+/, '').trim()
         return { name, isCurrent, isRemote: false }
       })
 
@@ -697,9 +736,12 @@ export interface AgentBranchInfo {
  * Get all agent branches (matching agent/* pattern)
  */
 export async function getAgentBranches(path: string): Promise<AgentBranchInfo[]> {
+  console.log('[Git] getAgentBranches called for path:', path)
   try {
     const branches = await listBranches(path)
+    console.log('[Git] All branches:', branches.map(b => b.name))
     const agentBranches = branches.filter((b) => b.name.startsWith('agent/') && !b.isRemote)
+    console.log('[Git] Agent branches:', agentBranches.map(b => b.name))
 
     const results: AgentBranchInfo[] = []
     for (const branch of agentBranches) {

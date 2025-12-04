@@ -496,13 +496,16 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('git:clone', async (_event, url: string, targetDir: string) => {
+    console.log('[IPC] git:clone called:', { url, targetDir })
     try {
       await clone(url, targetDir, (progress) => {
         mainWindow?.webContents.send('git:clone-progress', progress)
       })
+      console.log('[IPC] git:clone completed successfully')
       mainWindow?.webContents.send('git:clone-complete', { success: true, targetDir })
       return { success: true }
     } catch (error) {
+      console.error('[IPC] git:clone failed:', error)
       mainWindow?.webContents.send('git:clone-complete', { success: false, error: String(error) })
       return { success: false, error: String(error) }
     }
