@@ -237,7 +237,6 @@ export async function clone(
   targetDir: string,
   onProgress: (progress: CloneProgress) => void
 ): Promise<void> {
-  console.log('[Git] Clone starting:', { url, targetDir })
 
   // Check if target directory already exists
   if (existsSync(targetDir)) {
@@ -257,7 +256,6 @@ export async function clone(
     activeCloneProcess = spawn('git', ['clone', '--progress', url, targetDir], {
       stdio: ['pipe', 'pipe', 'pipe']
     })
-    console.log('[Git] Clone process spawned')
 
     // Git outputs progress to stderr
     activeCloneProcess.stderr?.on('data', (data: Buffer) => {
@@ -291,7 +289,6 @@ export async function clone(
     })
 
     activeCloneProcess.on('close', (code) => {
-      console.log('[Git] Clone process closed with code:', code)
       activeCloneProcess = null
       if (code === 0) {
         onProgress({
@@ -301,8 +298,6 @@ export async function clone(
         })
         resolve()
       } else {
-        console.error('[Git] Clone failed with code:', code, 'stderr:', stderrOutput)
-
         // Parse common git clone errors for better messages
         let errorMessage = `Git clone failed (code ${code})`
 
@@ -323,7 +318,6 @@ export async function clone(
     })
 
     activeCloneProcess.on('error', (error) => {
-      console.error('[Git] Clone process error:', error)
       activeCloneProcess = null
       reject(error)
     })
@@ -666,12 +660,9 @@ export function isBranchCheckedOut(path: string, branchName: string): string | n
  * When force=true and branch is in a worktree, the worktree is removed first
  */
 export async function deleteBranch(path: string, branchName: string, force?: boolean): Promise<{ deleted: boolean; reason?: string }> {
-  console.log(`[Git] deleteBranch called: path=${path}, branch=${branchName}, force=${force}`)
-
   // Check if branch exists first
   const exists = await branchExists(path, branchName)
   if (!exists) {
-    console.log(`[Git] Branch ${branchName} does not exist in ${path}`)
     return {
       deleted: false,
       reason: `Branch does not exist`
@@ -683,12 +674,9 @@ export async function deleteBranch(path: string, branchName: string, force?: boo
   if (checkedOutIn) {
     if (force) {
       // Force delete: remove the worktree first, then delete the branch
-      console.log(`[Git] Branch ${branchName} is checked out in worktree ${checkedOutIn}, removing worktree first`)
       try {
         await removeWorktree(path, checkedOutIn, true)
-        console.log(`[Git] Worktree ${checkedOutIn} removed`)
       } catch (error) {
-        console.error(`[Git] Failed to remove worktree ${checkedOutIn}:`, error)
         return {
           deleted: false,
           reason: `Failed to remove worktree: ${error}`
@@ -704,7 +692,6 @@ export async function deleteBranch(path: string, branchName: string, force?: boo
 
   const flag = force ? '-D' : '-d'
   runGit(path, `branch ${flag} ${branchName}`)
-  console.log(`[Git] Branch ${branchName} deleted`)
   return { deleted: true }
 }
 
@@ -736,12 +723,9 @@ export interface AgentBranchInfo {
  * Get all agent branches (matching agent/* pattern)
  */
 export async function getAgentBranches(path: string): Promise<AgentBranchInfo[]> {
-  console.log('[Git] getAgentBranches called for path:', path)
   try {
     const branches = await listBranches(path)
-    console.log('[Git] All branches:', branches.map(b => b.name))
     const agentBranches = branches.filter((b) => b.name.startsWith('agent/') && !b.isRemote)
-    console.log('[Git] Agent branches:', agentBranches.map(b => b.name))
 
     const results: AgentBranchInfo[] = []
     for (const branch of agentBranches) {

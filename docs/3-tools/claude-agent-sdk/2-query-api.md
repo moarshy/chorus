@@ -56,11 +56,13 @@ for await (const message of stream) {
 
 ```typescript
 options: {
-  cwd: '/path/to/workspace'  // Agent runs here
+  cwd: '/path/to/workspace'  // Agent starts here
 }
 ```
 
-The agent's working directory. All file operations are relative to this path.
+The agent's working directory. File operations default to this path.
+
+> **Security Warning**: The `cwd` option does **NOT** enforce strict directory boundaries. Agents can use absolute paths to access files outside the workspace. Implement path validation in `canUseTool` to enforce boundaries. See [11-security.md](./11-security.md) for details.
 
 ---
 

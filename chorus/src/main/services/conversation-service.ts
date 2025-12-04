@@ -132,10 +132,20 @@ export interface ContentBlock {
   input?: Record<string, unknown>
 }
 
+// Research progress phase types
+export type ResearchPhase = 'analyzing' | 'searching' | 'reasoning' | 'synthesizing' | 'complete'
+
+// Research source discovered during web search
+export interface ResearchSource {
+  url?: string
+  title?: string
+  query?: string
+}
+
 // Stored message format - includes both raw Claude message and display-friendly data
 export interface ConversationMessage {
   uuid: string
-  type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'error' | 'system'
+  type: 'user' | 'assistant' | 'tool_use' | 'tool_result' | 'error' | 'system' | 'research_progress' | 'research_result'
   content: string | ContentBlock[]
   timestamp: string
   sessionId?: string
@@ -158,6 +168,14 @@ export interface ConversationMessage {
   contextWindow?: number
   // Number of turns in this session
   numTurns?: number
+  // Research-specific fields (for type 'research_progress' and 'research_result')
+  researchPhase?: ResearchPhase
+  researchSources?: ResearchSource[]
+  searchCount?: number
+  // Research result metadata
+  outputPath?: string
+  wordCount?: number
+  sourceCount?: number
 }
 
 // Conversation Settings Types

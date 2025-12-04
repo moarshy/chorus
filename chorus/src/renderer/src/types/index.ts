@@ -59,7 +59,10 @@ export type {
   GitCommitCreatedEvent,
   DiffHunk,
   FileDiff,
-  MergeAnalysis
+  MergeAnalysis,
+  // Research types
+  ResearchPhase,
+  ResearchSource
 } from '../../../preload/index.d'
 
 // UI-specific types

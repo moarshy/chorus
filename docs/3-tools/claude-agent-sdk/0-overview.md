@@ -135,13 +135,15 @@ Chorus uses the SDK in the Electron main process to manage agent conversations:
 
 ## Configuration Essentials
 
+> **Security Warning**: The `cwd` option does NOT enforce strict directory boundaries. Agents can use absolute paths to read/write files outside the workspace. See [11-security.md](./11-security.md) for implementing path validation.
+
 ```typescript
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
 const stream = query({
   prompt: "Your task here",
   options: {
-    // Working directory (agent runs here)
+    // Working directory (agent starts here, but NOT restricted to)
     cwd: '/path/to/workspace',
 
     // Model selection
@@ -183,6 +185,7 @@ const stream = query({
 | [8-streaming](./8-streaming.md) | Real-time streaming and interruption |
 | [9-cost-tracking](./9-cost-tracking.md) | Token usage and cost calculation |
 | [10-slash-commands](./10-slash-commands.md) | Slash command configuration |
+| [11-security](./11-security.md) | Security considerations, path validation, sandboxing |
 
 ## External References
 

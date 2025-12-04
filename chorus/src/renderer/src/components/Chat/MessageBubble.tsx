@@ -1,6 +1,8 @@
 import type { ConversationMessage } from '../../types'
 import { ToolUseIndicator } from './ToolUseIndicator'
 import { MarkdownContent } from './MarkdownContent'
+import { ResearchProgress } from './ResearchProgress'
+import { ResearchResult } from './ResearchResult'
 
 interface MessageBubbleProps {
   message: ConversationMessage
@@ -36,6 +38,16 @@ const AlertCircleIcon = () => (
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const { type, content, timestamp, toolName, toolInput } = message
+
+  // Handle research progress messages
+  if (type === 'research_progress') {
+    return <ResearchProgress message={message} />
+  }
+
+  // Handle research result messages
+  if (type === 'research_result') {
+    return <ResearchResult message={message} />
+  }
 
   // Handle tool_use messages
   if (type === 'tool_use') {

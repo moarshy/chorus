@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { useChatStore } from '../../stores/chat-store'
 import { MessageBubble } from './MessageBubble'
 import { ToolCallsGroup } from './ToolCallsGroup'
+import { ResearchProgressGroup } from './ResearchProgressGroup'
 import type { ConversationMessage } from '../../types'
 
 // Tool execution pair
@@ -13,6 +14,7 @@ interface ToolExecution {
 // Grouped message type for rendering
 type GroupedMessage =
   | { type: 'tool_calls_group'; executions: ToolExecution[]; key: string }
+  | { type: 'research_progress_group'; messages: ConversationMessage[]; key: string }
   | { type: 'regular'; message: ConversationMessage; key: string }
 
 // SVG Icons
@@ -98,34 +100,50 @@ export function MessageList() {
       }
     }
 
-    // Second pass: group consecutive tool executions
+    // Second pass: group consecutive tool executions and research progress
     let currentToolGroup: ToolExecution[] = []
+    let currentResearchProgressGroup: ConversationMessage[] = []
+
+    const flushToolGroup = () => {
+      if (currentToolGroup.length > 0) {
+        result.push({
+          type: 'tool_calls_group',
+          executions: currentToolGroup,
+          key: currentToolGroup[0].toolUse.uuid
+        })
+        currentToolGroup = []
+      }
+    }
+
+    const flushResearchProgressGroup = () => {
+      if (currentResearchProgressGroup.length > 0) {
+        result.push({
+          type: 'research_progress_group',
+          messages: currentResearchProgressGroup,
+          key: currentResearchProgressGroup[0].uuid
+        })
+        currentResearchProgressGroup = []
+      }
+    }
 
     for (const item of pairedMessages) {
       if (item.type === 'tool_execution') {
+        flushResearchProgressGroup()
         currentToolGroup.push(item.exec)
+      } else if (item.message.type === 'research_progress') {
+        flushToolGroup()
+        currentResearchProgressGroup.push(item.message)
       } else {
-        // Flush any pending tool group
-        if (currentToolGroup.length > 0) {
-          result.push({
-            type: 'tool_calls_group',
-            executions: currentToolGroup,
-            key: currentToolGroup[0].toolUse.uuid
-          })
-          currentToolGroup = []
-        }
+        // Flush any pending groups
+        flushToolGroup()
+        flushResearchProgressGroup()
         result.push({ type: 'regular', message: item.message, key: item.message.uuid })
       }
     }
 
-    // Flush remaining tool group
-    if (currentToolGroup.length > 0) {
-      result.push({
-        type: 'tool_calls_group',
-        executions: currentToolGroup,
-        key: currentToolGroup[0].toolUse.uuid
-      })
-    }
+    // Flush remaining groups
+    flushToolGroup()
+    flushResearchProgressGroup()
 
     return result
   }, [messages])
@@ -178,6 +196,14 @@ export function MessageList() {
             <ToolCallsGroup
               key={item.key}
               executions={item.executions}
+            />
+          )
+        }
+        if (item.type === 'research_progress_group') {
+          return (
+            <ResearchProgressGroup
+              key={item.key}
+              messages={item.messages}
             />
           )
         }

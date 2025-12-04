@@ -2,6 +2,7 @@ import { query, type Query, type SDKPartialAssistantMessage } from '@anthropic-a
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { existsSync, readFileSync } from 'fs'
+import * as path from 'path'
 import {
   appendMessage,
   updateConversation,
@@ -79,6 +80,44 @@ function cancelPendingPermissions(conversationId: string): void {
       pendingPermissions.delete(requestId)
     }
   }
+}
+
+// ============================================
+// Path Validation (Security)
+// ============================================
+
+// Tools that operate on file paths and need validation
+const FILE_PATH_TOOLS = ['Read', 'Write', 'Edit', 'MultiEdit']
+
+/**
+ * Check if a file path is within the allowed workspace directory.
+ * This prevents agents from reading/writing files outside their workspace.
+ */
+function isPathWithinWorkspace(filePath: string, workspacePath: string): boolean {
+  // Resolve both paths to absolute, normalized forms
+  const resolvedFile = path.resolve(workspacePath, filePath)
+  const resolvedWorkspace = path.resolve(workspacePath)
+
+  // Check if the file path starts with the workspace path
+  // Use path.sep to ensure we match directory boundaries (not partial names)
+  const normalizedFile = resolvedFile + (resolvedFile.endsWith(path.sep) ? '' : '')
+  const normalizedWorkspace = resolvedWorkspace + path.sep
+
+  return normalizedFile.startsWith(normalizedWorkspace) || resolvedFile === resolvedWorkspace
+}
+
+/**
+ * Extract file path from tool input based on tool name
+ */
+function getFilePathFromToolInput(toolName: string, toolInput: Record<string, unknown>): string | null {
+  if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
+    return (toolInput.file_path as string) || null
+  }
+  if (toolName === 'MultiEdit') {
+    // MultiEdit has an array of edits, check the file_path
+    return (toolInput.file_path as string) || null
+  }
+  return null
 }
 
 // ============================================
@@ -646,6 +685,18 @@ export async function sendMessageSDK(
       toolName: string,
       toolInput: Record<string, unknown>
     ) => {
+      // Security: Validate file paths are within workspace (prevents path traversal attacks)
+      if (FILE_PATH_TOOLS.includes(toolName)) {
+        const filePath = getFilePathFromToolInput(toolName, toolInput)
+        if (filePath && !isPathWithinWorkspace(filePath, agentCwd)) {
+          console.warn(`[SDK] Blocked ${toolName} operation outside workspace: ${filePath} (workspace: ${agentCwd})`)
+          return {
+            behavior: 'deny' as const,
+            message: `Security: File path "${filePath}" is outside the workspace. Operations are restricted to: ${agentCwd}`
+          }
+        }
+      }
+
       const requestId = `${conversationId}-${uuidv4()}`
 
       // Send permission request to renderer

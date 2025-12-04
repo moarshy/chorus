@@ -11,7 +11,9 @@ import {
   generateTitleFromMessage,
   ConversationMessage,
   loadConversation,
-  ConversationSettings
+  ConversationSettings,
+  ResearchPhase,
+  ResearchSource
 } from './conversation-service'
 import { getOpenAIApiKey, getResearchOutputDirectory, GitSettings, DEFAULT_GIT_SETTINGS } from '../store'
 import {
@@ -214,8 +216,33 @@ Guidelines:
       signal: controller.signal
     })
 
-    // Track search count for status
+    // Track search count and sources for status
     let searchCount = 0
+    const researchSources: ResearchSource[] = []
+    let currentPhase: ResearchPhase = 'analyzing'
+    let phaseStartTime = Date.now()
+
+    // Helper to create and store a progress message
+    const storeProgressMessage = (phase: ResearchPhase, content: string, sources?: ResearchSource[]) => {
+      const progressMessage: ConversationMessage = {
+        uuid: uuidv4(),
+        type: 'research_progress',
+        content,
+        timestamp: new Date().toISOString(),
+        researchPhase: phase,
+        searchCount,
+        researchSources: sources
+      }
+      appendMessage(conversationId, progressMessage)
+      mainWindow.webContents.send('agent:message', {
+        conversationId,
+        agentId,
+        message: progressMessage
+      })
+    }
+
+    // Store initial analyzing phase
+    storeProgressMessage('analyzing', 'Analyzing your research question...')
 
     // Process stream events
     for await (const event of stream) {
@@ -232,6 +259,11 @@ Guidelines:
 
         // Handle text streaming - multiple possible event types
         if (innerEvent?.type === 'response.output_text.delta' && innerEvent.delta) {
+          // If we're getting text output, we're in synthesizing phase
+          if (currentPhase !== 'synthesizing') {
+            currentPhase = 'synthesizing'
+            storeProgressMessage('synthesizing', `Synthesizing findings from ${searchCount} searches...`, researchSources)
+          }
           streamingContent += innerEvent.delta
           mainWindow.webContents.send('agent:stream-delta', {
             conversationId,
@@ -243,6 +275,10 @@ Guidelines:
         if (innerEvent?.type === 'response.content_part.delta') {
           const contentDelta = (innerEvent as { delta?: { text?: string } }).delta?.text
           if (contentDelta) {
+            if (currentPhase !== 'synthesizing') {
+              currentPhase = 'synthesizing'
+              storeProgressMessage('synthesizing', `Synthesizing findings from ${searchCount} searches...`, researchSources)
+            }
             streamingContent += contentDelta
             mainWindow.webContents.send('agent:stream-delta', {
               conversationId,
@@ -254,20 +290,53 @@ Guidelines:
         // Track web searches for status
         if (innerEvent?.type === 'response.web_search_call.searching') {
           searchCount++
+          if (currentPhase !== 'searching') {
+            currentPhase = 'searching'
+          }
+
+          // Extract search query if available
+          const searchQuery = (innerEvent as { query?: string }).query
+          if (searchQuery) {
+            researchSources.push({ query: searchQuery })
+          }
+
+          // Store progress every few searches to avoid too many messages
+          if (searchCount === 1 || searchCount % 5 === 0) {
+            storeProgressMessage('searching', `Searching the web... (${searchCount} searches)`, researchSources)
+          }
+
           mainWindow.webContents.send('agent:stream-delta', {
             conversationId,
             delta: searchCount === 1 ? `🔍 Searching the web...\n` : ''
           })
         }
 
+        // Track when web search finds a URL
+        if (innerEvent?.type === 'response.web_search_call.completed') {
+          const searchResult = innerEvent as { url?: string; title?: string }
+          if (searchResult.url) {
+            researchSources.push({
+              url: searchResult.url,
+              title: searchResult.title
+            })
+          }
+        }
+
         // Show when reasoning
         if (innerEvent?.type === 'response.output_item.added') {
           const item = (innerEvent as { item?: { type: string } }).item
-          if (item?.type === 'reasoning' && searchCount === 0) {
-            mainWindow.webContents.send('agent:stream-delta', {
-              conversationId,
-              delta: '🤔 Analyzing your question...\n'
-            })
+          if (item?.type === 'reasoning') {
+            if (currentPhase !== 'reasoning') {
+              currentPhase = 'reasoning'
+              const elapsed = Math.round((Date.now() - phaseStartTime) / 1000)
+              storeProgressMessage('reasoning', `Reasoning about findings... (${elapsed}s elapsed)`)
+            }
+            if (searchCount === 0) {
+              mainWindow.webContents.send('agent:stream-delta', {
+                conversationId,
+                delta: '🤔 Analyzing your question...\n'
+              })
+            }
           }
         }
       }
@@ -281,22 +350,34 @@ Guidelines:
     // Get final output
     const finalOutput = (stream as { finalOutput?: string }).finalOutput || streamingContent
 
+    // Calculate metadata
+    const wordCount = finalOutput.split(/\s+/).filter(w => w.length > 0).length
+    const sourceCount = researchSources.filter(s => s.url).length
+    const totalDuration = Date.now() - phaseStartTime
+
     // Save research output to file (use worktree path if available)
     const outputDir = getResearchOutputDirectory()
     const outputPath = await saveResearchOutput(outputBasePath, outputDir, message, finalOutput)
 
-    // Create assistant message with the research output
-    const assistantMessage: ConversationMessage = {
+    // Create research result message with metadata
+    const resultMessage: ConversationMessage = {
       uuid: uuidv4(),
-      type: 'assistant',
+      type: 'research_result',
       content: finalOutput,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      researchPhase: 'complete',
+      searchCount,
+      researchSources,
+      outputPath,
+      wordCount,
+      sourceCount,
+      durationMs: totalDuration
     }
-    appendMessage(conversationId, assistantMessage)
+    appendMessage(conversationId, resultMessage)
     mainWindow.webContents.send('agent:message', {
       conversationId,
       agentId,
-      message: assistantMessage
+      message: resultMessage
     })
 
     // Send completion event with output path
@@ -331,18 +412,18 @@ Guidelines:
       updateConversation(conversationId, { title })
     }
 
-    // Store result message
-    const resultMessage: ConversationMessage = {
+    // Store completion system message (the research_result already has the content)
+    const completionMessage: ConversationMessage = {
       uuid: uuidv4(),
       type: 'system',
       content: `Research complete. Saved to: ${outputPath}`,
       timestamp: new Date().toISOString()
     }
-    appendMessage(conversationId, resultMessage)
+    appendMessage(conversationId, completionMessage)
     mainWindow.webContents.send('agent:message', {
       conversationId,
       agentId,
-      message: resultMessage
+      message: completionMessage
     })
   } catch (error) {
     // Handle abort/cancellation

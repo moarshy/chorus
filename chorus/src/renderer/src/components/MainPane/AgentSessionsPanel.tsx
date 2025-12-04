@@ -169,14 +169,9 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
 
   const loadBranches = async () => {
     setLoading(true)
-    console.log('[AgentSessionsPanel] Loading branches for:', workspacePath)
     const result = await window.api.git.getAgentBranches(workspacePath)
-    console.log('[AgentSessionsPanel] getAgentBranches result:', result)
     if (result.success && result.data) {
       setBranches(result.data)
-      console.log('[AgentSessionsPanel] Found', result.data.length, 'agent branches')
-    } else {
-      console.log('[AgentSessionsPanel] No agent branches found or error:', result.error)
     }
     setLoading(false)
   }
@@ -356,21 +351,17 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
     // Use provided base branch or the selected comparison branch
     const targetBaseBranch = baseBranch || comparisonBranch
 
-    console.log('[AgentSessionsPanel] Comparing', targetBaseBranch, 'with', branchName)
-
     // Get diff between base branch and the agent branch
     const result = await window.api.git.getDiffBetweenBranches(
       workspacePath,
       targetBaseBranch,
       branchName
     )
-    console.log('[AgentSessionsPanel] Diff result:', result)
 
     if (result.success && result.data) {
       setDiffData({ branch: branchName, files: result.data, baseBranch: targetBaseBranch })
       setExpandedFiles(new Set()) // Reset expanded files when loading new diff
     } else {
-      console.error('[AgentSessionsPanel] Diff failed:', result.error)
       setDiffData({
         branch: branchName,
         files: [],
@@ -421,7 +412,6 @@ export function AgentSessionsPanel({ workspacePath, workspaceId, onBranchChange 
   }
 
   if (branches.length === 0) {
-    console.log('[AgentSessionsPanel] No branches, returning null')
     return null // Don't show section if no agent branches
   }
 
