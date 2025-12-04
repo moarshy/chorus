@@ -1295,3 +1295,190 @@ export async function findWorktreeByConversationId(
   const worktrees = await listWorktrees(repoPath)
   return worktrees.find((w) => w.path.endsWith(`/${conversationId}`)) || null
 }
+
+// ============================================================================
+// GitHub CLI Operations (Sprint 17 - Create Workspace)
+// ============================================================================
+
+export interface GhCliStatus {
+  installed: boolean
+  authenticated: boolean
+  username?: string
+}
+
+export interface CreateRepoResult {
+  repoUrl: string
+  cloneUrl: string
+}
+
+/**
+ * Check if GitHub CLI is installed and authenticated
+ */
+export async function checkGhCli(): Promise<GhCliStatus> {
+  // Check if gh is installed
+  try {
+    execSync('which gh', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
+  } catch {
+    return { installed: false, authenticated: false }
+  }
+
+  // Check if authenticated
+  try {
+    execSync('gh auth status', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
+  } catch {
+    return { installed: true, authenticated: false }
+  }
+
+  // Get username
+  try {
+    const username = execSync('gh api user --jq ".login"', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim()
+    return { installed: true, authenticated: true, username }
+  } catch {
+    // Authenticated but couldn't get username - still consider it authenticated
+    return { installed: true, authenticated: true }
+  }
+}
+
+/**
+ * Parse GitHub CLI errors into user-friendly messages
+ */
+function parseGhError(error: string): string {
+  if (error.includes('already exists') || error.includes('Name already exists')) {
+    return 'A repository with this name already exists. Please choose a different name.'
+  }
+  if (error.includes('command not found') || error.includes('not found')) {
+    return 'GitHub CLI is not installed. Please install it from https://cli.github.com/'
+  }
+  if (error.includes('not logged in') || error.includes('authentication') || error.includes('auth login')) {
+    return 'Please authenticate with GitHub CLI by running: gh auth login'
+  }
+  if (error.includes('Could not resolve host') || error.includes('network')) {
+    return 'Network error. Please check your internet connection.'
+  }
+  return error
+}
+
+/**
+ * Create a new GitHub repository using gh CLI
+ */
+export async function createGitHubRepo(
+  name: string,
+  options: { description?: string; isPrivate: boolean }
+): Promise<CreateRepoResult> {
+  try {
+    // Build the command
+    let cmd = `gh repo create ${name}`
+    cmd += options.isPrivate ? ' --private' : ' --public'
+    cmd += ' --add-readme' // Ensures repo has initial commit
+    if (options.description) {
+      // Escape double quotes in description
+      const escapedDesc = options.description.replace(/"/g, '\\"')
+      cmd += ` --description "${escapedDesc}"`
+    }
+
+    // Create the repo
+    const output = execSync(cmd, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 30000
+    }).trim()
+
+    // Output is the repo URL: https://github.com/username/reponame
+    const repoUrl = output
+    const cloneUrl = `${repoUrl}.git`
+
+    return { repoUrl, cloneUrl }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    throw new Error(parseGhError(errorMessage))
+  }
+}
+
+/**
+ * Get the path to default commands directory
+ * In development: chorus/.claude/commands/
+ * In production: bundled in resources/default-commands/
+ */
+export function getDefaultCommandsDir(): string {
+  // Check if we're in development or production
+  // In development, __dirname is chorus/out/main
+  // We want to get to chorus/.claude/commands/
+  const devPath = join(__dirname, '../../.claude/commands')
+  if (existsSync(devPath)) {
+    return devPath
+  }
+
+  // Production: check for unpacked resources
+  const unpackedPath = join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'default-commands')
+  if (existsSync(unpackedPath)) {
+    return unpackedPath
+  }
+
+  // Fallback to packed resources path
+  const packedPath = join(process.resourcesPath, 'resources', 'default-commands')
+  if (existsSync(packedPath)) {
+    return packedPath
+  }
+
+  // Last resort - try relative to __dirname for various build configurations
+  const altPath = join(__dirname, '../../../.claude/commands')
+  if (existsSync(altPath)) {
+    return altPath
+  }
+
+  throw new Error('Default commands directory not found')
+}
+
+/**
+ * Initialize a new workspace with default Claude Code commands
+ * - Creates .claude/commands/ directory
+ * - Copies default commands
+ * - Commits and pushes changes
+ */
+export async function initializeWorkspaceCommands(repoPath: string): Promise<void> {
+  const { mkdirSync, copyFileSync, readdirSync } = await import('fs')
+
+  // Get default commands directory
+  const defaultCommandsDir = getDefaultCommandsDir()
+
+  // Create .claude/commands/ in the new workspace
+  const targetDir = join(repoPath, '.claude', 'commands')
+  mkdirSync(targetDir, { recursive: true })
+
+  // Copy all .md files from default commands
+  const files = readdirSync(defaultCommandsDir)
+  for (const file of files) {
+    if (file.endsWith('.md')) {
+      const srcPath = join(defaultCommandsDir, file)
+      const destPath = join(targetDir, file)
+      copyFileSync(srcPath, destPath)
+    }
+  }
+
+  // Stage the new files
+  runGit(repoPath, 'add .claude/commands/')
+
+  // Commit
+  runGit(repoPath, 'commit -m "Initialize workspace with default Claude Code commands"')
+
+  // Push
+  runGit(repoPath, 'push')
+}
+
+/**
+ * Clean up a failed workspace creation
+ * Deletes local directory if it exists (best effort)
+ */
+export async function cleanupFailedWorkspace(localPath: string): Promise<void> {
+  const { rmSync } = await import('fs')
+  try {
+    if (existsSync(localPath)) {
+      rmSync(localPath, { recursive: true, force: true })
+    }
+  } catch {
+    // Ignore cleanup errors - best effort
+  }
+}

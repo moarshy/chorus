@@ -488,6 +488,19 @@ interface WorktreeStatus {
   stagedFiles: number
 }
 
+// GitHub CLI status (Sprint 17 - Create Workspace)
+interface GhCliStatus {
+  installed: boolean
+  authenticated: boolean
+  username?: string
+}
+
+// Create repo result (Sprint 17 - Create Workspace)
+interface CreateRepoResult {
+  repoUrl: string
+  cloneUrl: string
+}
+
 // ============================================
 // Conversation Settings Types
 // ============================================
@@ -635,6 +648,11 @@ interface GitAPI {
   pruneWorktrees: (repoPath: string) => Promise<ApiResult>
   getWorktreeStatus: (worktreePath: string) => Promise<ApiResult<WorktreeStatus>>
   isWorktree: (path: string) => Promise<ApiResult<boolean>>
+
+  // Create Workspace (Sprint 17)
+  checkGhCli: () => Promise<ApiResult<GhCliStatus>>
+  createRepo: (name: string, options: { description?: string; isPrivate: boolean }) => Promise<ApiResult<CreateRepoResult>>
+  initializeWorkspace: (repoPath: string) => Promise<ApiResult>
 }
 
 interface ConversationAPI {
@@ -785,5 +803,8 @@ export type {
   SlashCommand,
   // Research types
   ResearchPhase,
-  ResearchSource
+  ResearchSource,
+  // Create Workspace types (Sprint 17)
+  GhCliStatus,
+  CreateRepoResult
 }

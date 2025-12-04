@@ -245,7 +245,14 @@ const api = {
     getWorktreeStatus: (worktreePath: string) =>
       ipcRenderer.invoke('git:get-worktree-status', worktreePath),
     isWorktree: (path: string) =>
-      ipcRenderer.invoke('git:is-worktree', path)
+      ipcRenderer.invoke('git:is-worktree', path),
+
+    // Create Workspace (Sprint 17)
+    checkGhCli: () => ipcRenderer.invoke('git:check-gh-cli'),
+    createRepo: (name: string, options: { description?: string; isPrivate: boolean }) =>
+      ipcRenderer.invoke('git:create-repo', name, options),
+    initializeWorkspace: (repoPath: string) =>
+      ipcRenderer.invoke('git:initialize-workspace', repoPath)
   },
 
   // Conversation operations

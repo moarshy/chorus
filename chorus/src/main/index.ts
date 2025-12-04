@@ -79,7 +79,11 @@ import {
   removeWorktree,
   pruneWorktrees,
   getWorktreeStatus,
-  isWorktree as isWorktreeFn
+  isWorktree as isWorktreeFn,
+  // Create Workspace functions (Sprint 17)
+  checkGhCli,
+  createGitHubRepo,
+  initializeWorkspaceCommands
 } from './services/git-service'
 import {
   listConversations,
@@ -869,6 +873,40 @@ app.whenReady().then(() => {
     try {
       const result = await isWorktreeFn(path)
       return { success: true, data: result }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // ============================================
+  // CREATE WORKSPACE IPC HANDLERS (Sprint 17)
+  // ============================================
+
+  ipcMain.handle('git:check-gh-cli', async () => {
+    try {
+      const status = await checkGhCli()
+      return { success: true, data: status }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    'git:create-repo',
+    async (_event, name: string, options: { description?: string; isPrivate: boolean }) => {
+      try {
+        const result = await createGitHubRepo(name, options)
+        return { success: true, data: result }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle('git:initialize-workspace', async (_event, repoPath: string) => {
+    try {
+      await initializeWorkspaceCommands(repoPath)
+      return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
     }
