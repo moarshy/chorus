@@ -1,7 +1,5 @@
 import { WorkspacesPanel } from './WorkspacesPanel'
-import { AgentConversationsPanel } from './AgentConversationsPanel'
 import { useUIStore } from '../../stores/ui-store'
-import { useWorkspaceStore } from '../../stores/workspace-store'
 
 // SVG Icons
 const ChevronLeftIcon = () => (
@@ -22,15 +20,7 @@ const WorkspaceIcon = () => (
   </svg>
 )
 
-const ChatIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </svg>
-)
-
 function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
-  const { selectedAgentId } = useWorkspaceStore()
-
   return (
     <div className="w-10 flex flex-col items-center bg-sidebar border-r border-default">
       {/* Titlebar spacing */}
@@ -48,17 +38,10 @@ function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
       <div className="flex flex-col gap-2 mt-4">
         <button
           onClick={onExpand}
-          className={`p-2 transition-colors ${selectedAgentId ? 'text-muted hover:text-white' : 'text-accent'}`}
+          className="p-2 transition-colors text-accent"
           title="Workspaces"
         >
           <WorkspaceIcon />
-        </button>
-        <button
-          onClick={onExpand}
-          className={`p-2 transition-colors ${selectedAgentId ? 'text-accent' : 'text-muted hover:text-white'}`}
-          title="Conversations"
-        >
-          <ChatIcon />
         </button>
       </div>
     </div>
@@ -67,7 +50,6 @@ function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
 
 export function Sidebar() {
   const { leftPanelWidth, leftPanelCollapsed, setLeftPanelCollapsed } = useUIStore()
-  const { selectedAgentId } = useWorkspaceStore()
 
   if (leftPanelCollapsed) {
     return <CollapsedSidebar onExpand={() => setLeftPanelCollapsed(false)} />
@@ -89,9 +71,9 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Content - show conversations panel if agent selected, otherwise show workspaces */}
+      {/* Content - always show workspaces with inline agents and conversations */}
       <div className="flex-1 overflow-hidden">
-        {selectedAgentId ? <AgentConversationsPanel /> : <WorkspacesPanel />}
+        <WorkspacesPanel />
       </div>
     </div>
   )

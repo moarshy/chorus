@@ -112,7 +112,8 @@ const api = {
     list: () => ipcRenderer.invoke('workspace:list'),
     add: (path: string) => ipcRenderer.invoke('workspace:add', path),
     remove: (id: string) => ipcRenderer.invoke('workspace:remove', id),
-    refresh: (id: string) => ipcRenderer.invoke('workspace:refresh', id)
+    refresh: (id: string) => ipcRenderer.invoke('workspace:refresh', id),
+    toggleExpanded: (id: string) => ipcRenderer.invoke('workspace:toggleExpanded', id)
   },
 
   // Agent operations

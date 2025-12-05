@@ -464,6 +464,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         ws.id === id ? { ...ws, isExpanded: !ws.isExpanded } : ws
       )
     })
+    // Persist to main process
+    window.api?.workspace.toggleExpanded(id)
   },
 
   // Set root workspace directory

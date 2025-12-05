@@ -12,6 +12,7 @@ import {
   addWorkspace,
   removeWorkspace,
   updateWorkspace,
+  toggleWorkspaceExpanded,
   getChorusDir,
   getWorkspaceSettings,
   setWorkspaceSettings,
@@ -281,6 +282,15 @@ app.whenReady().then(() => {
       const info = await getWorkspaceInfo(workspace.path)
       const updated = updateWorkspace(id, info)
       return { success: true, data: updated }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('workspace:toggleExpanded', async (_event, id: string) => {
+    try {
+      toggleWorkspaceExpanded(id)
+      return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
     }

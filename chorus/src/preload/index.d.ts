@@ -562,6 +562,7 @@ interface WorkspaceAPI {
   add: (path: string) => Promise<ApiResult<Workspace>>
   remove: (id: string) => Promise<ApiResult>
   refresh: (id: string) => Promise<ApiResult<Workspace>>
+  toggleExpanded: (id: string) => Promise<ApiResult>
 }
 
 interface AgentsAPI {

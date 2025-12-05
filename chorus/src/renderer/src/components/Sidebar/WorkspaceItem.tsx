@@ -44,7 +44,6 @@ const DocumentIcon = () => (
 export function WorkspaceItem({ workspace }: WorkspaceItemProps) {
   const {
     selectedWorkspaceId,
-    selectWorkspace,
     toggleWorkspaceExpanded,
     removeWorkspace,
     refreshWorkspace
@@ -62,7 +61,8 @@ export function WorkspaceItem({ workspace }: WorkspaceItemProps) {
   const isSelected = selectedWorkspaceId === workspace.id
 
   const handleClick = () => {
-    selectWorkspace(workspace.id)
+    // Toggle expansion inline instead of navigating to workspace view
+    toggleWorkspaceExpanded(workspace.id)
   }
 
   const handleToggleExpand = (e: React.MouseEvent) => {
