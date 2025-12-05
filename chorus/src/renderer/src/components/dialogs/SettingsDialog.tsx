@@ -376,7 +376,7 @@ export function SettingsDialog() {
           <button
             onClick={handleSave}
             className="btn btn-primary"
-            disabled={!rootDir || isSaving}
+            disabled={isSaving}
           >
             {isSaving ? 'Saving...' : 'Save'}
           </button>
